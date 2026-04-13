@@ -147,9 +147,10 @@ function buildQuoteHtml(quote: Quote): string {
     body {
       font-family: Arial, 'Helvetica Neue', sans-serif;
       font-size: 10pt; color: #111; background: #fff;
-      width: 216mm; height: 279mm;
+      width: 216mm; min-height: 279mm;
       padding: 12mm 16mm 10mm 16mm;
       display: flex; flex-direction: column;
+      overflow: visible;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -226,7 +227,7 @@ function buildQuoteHtml(quote: Quote): string {
  */
 function printQuoteWindow(quote: Quote, win?: Window | null) {
   const html = buildQuoteHtml(quote);
-  const target = win ?? window.open("", "_blank", "width=900,height=700");
+  const target = win ?? window.open("", "_blank", "width=900,height=1100");
   if (!target) return;
   target.document.open();
   target.document.write(html);
@@ -252,11 +253,11 @@ function QuotePrintView({ quote }: { quote: Quote }) {
       style={{
         background: "#fff", color: "#111",
         fontFamily: "Arial, 'Helvetica Neue', sans-serif",
-        width: "216mm", height: "279mm",
+        width: "216mm", minHeight: "279mm",
         margin: "0 auto", padding: "12mm 16mm 10mm 16mm",
         boxSizing: "border-box", fontSize: "10pt",
         display: "flex", flexDirection: "column",
-        overflow: "hidden",
+        overflow: "visible",
       }}
     >
       {/* Header */}
@@ -376,6 +377,21 @@ function QuotePrintView({ quote }: { quote: Quote }) {
 
 // Modal de vista previa — solo muestra el documento, sin auto-imprimir
 function QuotePrintModal({ quote, onPrint, onClose }: { quote: Quote; onPrint: () => void; onClose: () => void }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = React.useState(1);
+  const DOC_WIDTH = 816; // 216mm at 96dpi
+
+  React.useLayoutEffect(() => {
+    function calcScale() {
+      const available = containerRef.current?.clientWidth ?? window.innerWidth;
+      const padding = 32; // 16px each side
+      setScale(Math.min(1, (available - padding) / DOC_WIDTH));
+    }
+    calcScale();
+    window.addEventListener("resize", calcScale);
+    return () => window.removeEventListener("resize", calcScale);
+  }, []);
+
   const btnBase: React.CSSProperties = {
     border: "none", borderRadius: "8px", padding: "8px 16px",
     fontWeight: 700, fontSize: "13px", cursor: "pointer",
@@ -387,16 +403,19 @@ function QuotePrintModal({ quote, onPrint, onClose }: { quote: Quote; onPrint: (
         <span style={{ fontSize: "13px", fontWeight: 600 }}>{quote.quoteNumber}</span>
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={onPrint} style={{ ...btnBase, background: "#4472C4", color: "#fff" }}>
-            <Printer size={14} /> Imprimir Cotización
+            <Printer size={14} /> Imprimir / PDF
           </button>
           <button onClick={onClose} style={{ ...btnBase, background: "transparent", color: "#94a3b8", border: "1px solid #334155" }}>
             Cerrar
           </button>
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px 16px" }}>
-        <div style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.45)", borderRadius: "4px", overflow: "hidden" }}>
-          <QuotePrintView quote={quote} />
+      <div ref={containerRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "20px 16px" }}>
+        {/* zoom shrinks both visual size and layout space, so scrollbar stays accurate */}
+        <div style={{ zoom: scale as any, flexShrink: 0 }}>
+          <div style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.45)", borderRadius: "4px", overflow: "hidden" }}>
+            <QuotePrintView quote={quote} />
+          </div>
         </div>
       </div>
     </div>
@@ -480,7 +499,7 @@ export default function Cotizaciones() {
   const handlePrintClick = async (e: React.MouseEvent, quoteId: number) => {
     e.stopPropagation();
     // 1. Abrir ventana inmediatamente mientras estamos en el gesto del usuario
-    const win = window.open("", "_blank", "width=900,height=700");
+    const win = window.open("", "_blank", "width=900,height=1100");
     if (!win) return;
     win.document.write(`<html><body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc"><div style="text-align:center;color:#64748b"><div style="font-size:32px;margin-bottom:12px">&#128247;</div><div style="font-size:14px">Preparando cotización...</div></div></body></html>`);
     printWinRef.current = win;
