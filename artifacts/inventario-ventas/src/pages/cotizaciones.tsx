@@ -800,22 +800,24 @@ export default function Cotizaciones() {
   if (view === "list") {
     return (
       <div className="space-y-5 animate-in fade-in duration-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ClipboardList className="h-6 w-6 text-foreground" />
+        {/* Top bar */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 sm:h-6 sm:w-6 text-foreground flex-shrink-0" />
             <h1 className="text-2xl font-bold text-foreground">Cotizaciones</h1>
           </div>
-          <Button onClick={openCreate} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-            <Plus className="h-4 w-4" /> Nueva Cotización
+          <Button onClick={openCreate} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold flex-shrink-0 h-11">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nueva Cotización</span>
           </Button>
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              className="pl-9 w-64 bg-background"
+              className="pl-9 w-full sm:w-64 bg-background"
               placeholder="Buscar por cliente o número..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -830,7 +832,8 @@ export default function Cotizaciones() {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Status filters — scrollable on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
             {(["all", "borrador", "enviada", "aceptada", "rechazada", "convertida"] as const).map(s => {
               const labels: Record<string, string> = {
                 all: "Todas", borrador: "Borrador", enviada: "Enviada",
@@ -842,7 +845,7 @@ export default function Cotizaciones() {
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border whitespace-nowrap flex-shrink-0 ${
                     active
                       ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                       : "bg-background text-muted-foreground border-border hover:border-blue-300 hover:text-foreground"
@@ -859,7 +862,7 @@ export default function Cotizaciones() {
             })}
           </div>
 
-          <span className="text-sm text-muted-foreground ml-auto">
+          <span className="text-sm text-muted-foreground sm:ml-auto">
             {filtered.length} {filtered.length === 1 ? "cotización" : "cotizaciones"}
           </span>
         </div>
@@ -884,69 +887,140 @@ export default function Cotizaciones() {
             </p>
           </div>
         ) : (
-          <div className="bg-card rounded-xl border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Número</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Válida hasta</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                  <th className="w-28 px-2 py-3 text-right font-semibold text-muted-foreground">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((q, idx) => (
-                  <tr
-                    key={q.id}
-                    className={`hover:bg-muted/50 transition-colors border-b last:border-b-0 ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
-                  >
-                    <td className="px-4 py-3 font-mono font-semibold text-foreground cursor-pointer" onClick={() => openEdit(q)}>{q.quoteNumber}</td>
-                    <td className="px-4 py-3 font-medium text-foreground max-w-[180px] truncate cursor-pointer" onClick={() => openEdit(q)}>{q.clientName}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell cursor-pointer" onClick={() => openEdit(q)}>{q.issueDate}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell cursor-pointer" onClick={() => openEdit(q)}>
-                      {q.validUntil ?? <span className="text-muted-foreground/50">—</span>}
-                    </td>
-                    <td className="px-4 py-3 cursor-pointer" onClick={() => openEdit(q)}>
-                      <StatusBadge status={q.status} />
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-foreground cursor-pointer" onClick={() => openEdit(q)}>
-                      {formatCurrency(q.total)}
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          title="Imprimir Cotización"
-                          onClick={e => handlePrintClick(e, q.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        >
-                          <Printer className="h-4 w-4" />
-                        </button>
-                        {q.status !== "convertida" && q.status !== "rechazada" && (
-                          <button
-                            title="Convertir a Factura"
-                            onClick={e => { e.stopPropagation(); setConvertId(q.id); setConvertOpen(true); }}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-                          >
-                            <FileText className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          title="Eliminar"
-                          onClick={e => { e.stopPropagation(); setDeleteId(q.id); setDeleteOpen(true); }}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* ── Desktop Table ── */}
+            <div className="hidden sm:block bg-card rounded-xl border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Número</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Válida hasta</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
+                    <th className="w-28 px-2 py-3 text-right font-semibold text-muted-foreground">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((q, idx) => (
+                    <tr
+                      key={q.id}
+                      className={`hover:bg-muted/50 transition-colors border-b last:border-b-0 ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
+                    >
+                      <td className="px-4 py-3 font-mono font-semibold text-foreground cursor-pointer" onClick={() => openEdit(q)}>{q.quoteNumber}</td>
+                      <td className="px-4 py-3 font-medium text-foreground max-w-[180px] truncate cursor-pointer" onClick={() => openEdit(q)}>{q.clientName}</td>
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell cursor-pointer" onClick={() => openEdit(q)}>{q.issueDate}</td>
+                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell cursor-pointer" onClick={() => openEdit(q)}>
+                        {q.validUntil ?? <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => openEdit(q)}>
+                        <StatusBadge status={q.status} />
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-foreground cursor-pointer" onClick={() => openEdit(q)}>
+                        {formatCurrency(q.total)}
+                      </td>
+                      <td className="px-2 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            title="Imprimir Cotización"
+                            onClick={e => handlePrintClick(e, q.id)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                          {q.status !== "convertida" && q.status !== "rechazada" && (
+                            <button
+                              title="Convertir a Factura"
+                              onClick={e => { e.stopPropagation(); setConvertId(q.id); setConvertOpen(true); }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            title="Eliminar"
+                            onClick={e => { e.stopPropagation(); setDeleteId(q.id); setDeleteOpen(true); }}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Mobile Cards ── */}
+            <div className="sm:hidden space-y-3">
+              {filtered.map(q => (
+                <div key={q.id} className="bg-card border border-border rounded-xl overflow-hidden">
+
+                  {/* Card header — tap to open */}
+                  <div className="px-4 pt-4 pb-3 cursor-pointer" onClick={() => openEdit(q)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-foreground">{q.quoteNumber}</span>
+                          <StatusBadge status={q.status} />
+                        </div>
+                        <p className="font-semibold text-foreground mt-1 truncate">{q.clientName}</p>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          <span className="text-xs text-muted-foreground">{q.issueDate}</span>
+                          {q.validUntil && (
+                            <span className="text-xs text-muted-foreground">Válida: {q.validUntil}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xl font-bold text-foreground">{formatCurrency(q.total)}</p>
+                        {(Number(q.discount) > 0 || Number(q.tax) > 0) && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Sub: {formatCurrency(q.subtotal)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action bar */}
+                  <div className="flex border-t border-border/60 divide-x divide-border/60">
+                    <button
+                      className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      onClick={() => openEdit(q)}
+                    >
+                      Abrir
+                    </button>
+                    <button
+                      title="Imprimir / PDF"
+                      className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      onClick={e => handlePrintClick(e, q.id)}
+                    >
+                      <Printer className="h-5 w-5" />
+                    </button>
+                    {q.status !== "convertida" && q.status !== "rechazada" && (
+                      <button
+                        title="Convertir a Factura"
+                        className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                        onClick={e => { e.stopPropagation(); setConvertId(q.id); setConvertOpen(true); }}
+                      >
+                        <FileText className="h-5 w-5" />
+                      </button>
+                    )}
+                    <button
+                      title="Eliminar"
+                      className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      onClick={e => { e.stopPropagation(); setDeleteId(q.id); setDeleteOpen(true); }}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Print Modal — vista previa */}
