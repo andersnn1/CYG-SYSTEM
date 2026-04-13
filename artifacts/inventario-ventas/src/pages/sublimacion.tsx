@@ -131,93 +131,160 @@ export default function Sublimacion() {
   const consumibles = items?.filter(i => i.itemType === "consumible") ?? [];
 
   const ItemTable = ({ data, title }: { data: SublimationItem[], title: string }) => (
-    <Card>
-      <CardContent className="p-0">
-        <div className="px-4 py-3 border-b bg-muted/50 flex items-center gap-2">
-          <h2 className="font-semibold text-sm">{title}</h2>
-          <Badge variant="secondary">{data.length}</Badge>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left font-medium px-4 py-3 w-16">ID</th>
-                <th className="text-left font-medium px-4 py-3 w-28">Código</th>
-                <th className="text-left font-medium px-4 py-3">Nombre</th>
-                <th className="text-left font-medium px-4 py-3">Categoria</th>
-                <th className="text-center font-medium px-4 py-3">Stock</th>
-                <th className="text-right font-medium px-4 py-3">Costo</th>
-                <th className="text-right font-medium px-4 py-3">Precio Venta</th>
-                <th className="text-center font-medium px-4 py-3">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.length > 0 ? data.map(item => {
-                const isLowStock = item.stock !== null && item.stock !== undefined && item.stock < 5;
-                return (
-                  <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-semibold text-muted-foreground">#{String(item.id).padStart(3, "0")}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.code
-                        ? <Badge variant="secondary" className="font-mono text-xs">{item.code}</Badge>
-                        : <span className="text-xs text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{item.name}</div>
-                      {item.description && <div className="text-xs text-muted-foreground">{item.description}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
-                    <td className="px-4 py-3 text-center">
-                      {item.stock === null || item.stock === undefined ? (
-                        <Badge variant="outline">N/A</Badge>
-                      ) : isLowStock ? (
-                        <Badge variant="destructive" className="gap-1">
-                          <AlertTriangle className="h-3 w-3" /> {item.stock}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">{item.stock}</Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(item.costPrice)}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.salePrice)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-center gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => openDelete(item.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
+    <div>
+      {/* Section header */}
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="font-semibold text-sm">{title}</h2>
+        <Badge variant="secondary">{data.length}</Badge>
+      </div>
+
+      {/* ── Desktop Table ── */}
+      <div className="hidden sm:block">
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left font-medium px-4 py-3 w-16">ID</th>
+                    <th className="text-left font-medium px-4 py-3 w-28">Código</th>
+                    <th className="text-left font-medium px-4 py-3">Nombre</th>
+                    <th className="text-left font-medium px-4 py-3">Categoria</th>
+                    <th className="text-center font-medium px-4 py-3">Stock</th>
+                    <th className="text-right font-medium px-4 py-3">Costo</th>
+                    <th className="text-right font-medium px-4 py-3">Precio Venta</th>
+                    <th className="text-center font-medium px-4 py-3">Acciones</th>
                   </tr>
-                );
-              }) : (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No hay items en esta categoria.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+                </thead>
+                <tbody>
+                  {data.length > 0 ? data.map(item => {
+                    const isLowStock = item.stock !== null && item.stock !== undefined && item.stock < 5;
+                    return (
+                      <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs font-semibold text-muted-foreground">#{String(item.id).padStart(3, "0")}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {item.code
+                            ? <Badge variant="secondary" className="font-mono text-xs">{item.code}</Badge>
+                            : <span className="text-xs text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{item.name}</div>
+                          {item.description && <div className="text-xs text-muted-foreground">{item.description}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
+                        <td className="px-4 py-3 text-center">
+                          {item.stock === null || item.stock === undefined ? (
+                            <Badge variant="outline">N/A</Badge>
+                          ) : isLowStock ? (
+                            <Badge variant="destructive" className="gap-1">
+                              <AlertTriangle className="h-3 w-3" /> {item.stock}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">{item.stock}</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(item.costPrice)}</td>
+                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.salePrice)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-center gap-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => openDelete(item.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No hay items en esta categoria.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Mobile Cards ── */}
+      <div className="sm:hidden space-y-3">
+        {data.length > 0 ? data.map(item => {
+          const isLowStock = item.stock !== null && item.stock !== undefined && item.stock < 5;
+          return (
+            <div key={item.id} className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-base truncate">{item.name}</span>
+                    {item.code && (
+                      <Badge variant="secondary" className="font-mono text-xs flex-shrink-0">{item.code}</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{item.category}</p>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground mt-1 truncate">{item.description}</p>
+                  )}
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => openEdit(item)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-11 w-11 text-destructive hover:text-destructive" onClick={() => openDelete(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                <div className="bg-muted/50 rounded-lg p-2 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">Stock</div>
+                  {item.stock === null || item.stock === undefined ? (
+                    <Badge variant="outline" className="text-xs">N/A</Badge>
+                  ) : isLowStock ? (
+                    <Badge variant="destructive" className="gap-1 text-xs">
+                      <AlertTriangle className="h-3 w-3" /> {item.stock}
+                    </Badge>
+                  ) : (
+                    <span className="font-semibold">{item.stock}</span>
+                  )}
+                </div>
+                <div className="bg-muted/50 rounded-lg p-2 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">Venta</div>
+                  <span className="font-semibold">{formatCurrency(item.salePrice)}</span>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-2 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">Costo</div>
+                  <span className="font-medium text-muted-foreground">{formatCurrency(item.costPrice)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        }) : (
+          <div className="bg-card border border-border rounded-xl py-8 text-center text-muted-foreground">
+            No hay items en esta categoria.
+          </div>
+        )}
+      </div>
+    </div>
   );
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Printer className="h-8 w-8 text-primary" />
-            Sublimacion
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Printer className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
+            Sublimación
           </h1>
-          <p className="text-muted-foreground mt-1">Control de maquinaria y consumibles</p>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Control de maquinaria y consumibles</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Nuevo Item
+        <Button onClick={openCreate} className="gap-2 flex-shrink-0 h-11">
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nuevo Item</span>
         </Button>
       </div>
 

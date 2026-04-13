@@ -231,16 +231,17 @@ export default function Ventas() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <ShoppingCart className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
             Ventas
           </h1>
-          <p className="text-muted-foreground mt-1">Registro y seguimiento de ventas</p>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Registro y seguimiento de ventas</p>
         </div>
-        <Button onClick={() => setFormOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" /> Nueva Venta
+        <Button onClick={() => setFormOpen(true)} className="gap-2 flex-shrink-0 h-11">
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nueva Venta</span>
         </Button>
       </div>
 
@@ -280,75 +281,134 @@ export default function Ventas() {
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left font-medium px-4 py-3">Fecha</th>
-                    <th className="text-left font-medium px-4 py-3">Producto</th>
-                    <th className="text-left font-medium px-4 py-3">Cliente</th>
-                    <th className="text-center font-medium px-4 py-3">Tipo</th>
-                    <th className="text-center font-medium px-4 py-3">Cant.</th>
-                    <th className="text-right font-medium px-4 py-3">Precio Unit.</th>
-                    <th className="text-right font-medium px-4 py-3">Costo</th>
-                    <th className="text-right font-medium px-4 py-3">Envío</th>
-                    <th className="text-right font-medium px-4 py-3">Total</th>
-                    <th className="text-right font-medium px-4 py-3">Ganancia</th>
-                    <th className="text-center font-medium px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales && sales.length > 0 ? sales.map(sale => (
-                    <tr key={sale.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+        <>
+          {/* ── Desktop Table ── */}
+          <div className="hidden sm:block">
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left font-medium px-4 py-3">Fecha</th>
+                        <th className="text-left font-medium px-4 py-3">Producto</th>
+                        <th className="text-left font-medium px-4 py-3">Cliente</th>
+                        <th className="text-center font-medium px-4 py-3">Tipo</th>
+                        <th className="text-center font-medium px-4 py-3">Cant.</th>
+                        <th className="text-right font-medium px-4 py-3">Precio Unit.</th>
+                        <th className="text-right font-medium px-4 py-3">Costo</th>
+                        <th className="text-right font-medium px-4 py-3">Envío</th>
+                        <th className="text-right font-medium px-4 py-3">Total</th>
+                        <th className="text-right font-medium px-4 py-3">Ganancia</th>
+                        <th className="text-center font-medium px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sales && sales.length > 0 ? sales.map(sale => (
+                        <tr key={sale.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                            {new Date(sale.saleDate + "T12:00:00").toLocaleDateString("es-HN")}
+                          </td>
+                          <td className="px-4 py-3 font-medium max-w-[180px] truncate">{sale.productName}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{sale.clientName ?? "General"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge variant={sale.productType === "perfumeria" ? "default" : "secondary"} className="text-xs">
+                              {sale.productType === "perfumeria" ? "Perfumeria" : "Sublimacion"}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-center">{sale.quantity}</td>
+                          <td className="px-4 py-3 text-right">{formatCurrency(sale.unitPrice)}</td>
+                          <td className="px-4 py-3 text-right text-muted-foreground text-xs">{formatCurrency(sale.costPrice)}</td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">
+                            {sale.shippingCost > 0 ? formatCurrency(sale.shippingCost) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium">{formatCurrency(sale.totalAmount)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`font-medium flex items-center justify-end gap-1 ${sale.netProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                              <TrendingUp className="h-3 w-3" />{formatCurrency(sale.netProfit)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={() => openEdit(sale)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => { setDeleteId(sale.id); setDeleteOpen(true); }}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
+                            No hay ventas en {MONTHS[Number(filterMonth) - 1]} {filterYear}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Mobile Cards ── */}
+          <div className="sm:hidden space-y-3">
+            {sales && sales.length > 0 ? sales.map(sale => (
+              <div key={sale.id} className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-base truncate">{sale.productName}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <Badge variant={sale.productType === "perfumeria" ? "default" : "secondary"} className="text-xs">
+                        {sale.productType === "perfumeria" ? "Perfumería" : "Sublimación"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
                         {new Date(sale.saleDate + "T12:00:00").toLocaleDateString("es-HN")}
-                      </td>
-                      <td className="px-4 py-3 font-medium max-w-[180px] truncate">{sale.productName}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{sale.clientName ?? "General"}</td>
-                      <td className="px-4 py-3 text-center">
-                        <Badge variant={sale.productType === "perfumeria" ? "default" : "secondary"} className="text-xs">
-                          {sale.productType === "perfumeria" ? "Perfumeria" : "Sublimacion"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-center">{sale.quantity}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(sale.unitPrice)}</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground text-xs">{formatCurrency(sale.costPrice)}</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        {sale.shippingCost > 0 ? formatCurrency(sale.shippingCost) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(sale.totalAmount)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`font-medium flex items-center justify-end gap-1 ${sale.netProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
-                          <TrendingUp className="h-3 w-3" />{formatCurrency(sale.netProfit)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => openEdit(sale)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => { setDeleteId(sale.id); setDeleteOpen(true); }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground">
-                        No hay ventas en {MONTHS[Number(filterMonth) - 1]} {filterYear}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                      </span>
+                      {sale.clientName && (
+                        <span className="text-xs text-muted-foreground truncate">{sale.clientName}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground"
+                      onClick={() => openEdit(sale)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-11 w-11 text-destructive"
+                      onClick={() => { setDeleteId(sale.id); setDeleteOpen(true); }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                  <div className="bg-muted/50 rounded-lg p-2 text-center">
+                    <div className="text-xs text-muted-foreground mb-1">Cant. × Precio</div>
+                    <span className="font-medium">{sale.quantity} × {formatCurrency(sale.unitPrice)}</span>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-2 text-center">
+                    <div className="text-xs text-muted-foreground mb-1">Total</div>
+                    <span className="font-semibold">{formatCurrency(sale.totalAmount)}</span>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-2 text-center">
+                    <div className="text-xs text-muted-foreground mb-1">Ganancia</div>
+                    <span className={`font-semibold ${sale.netProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>
+                      {formatCurrency(sale.netProfit)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="bg-card border border-border rounded-xl py-12 text-center text-muted-foreground">
+                No hay ventas en {MONTHS[Number(filterMonth) - 1]} {filterYear}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* New Sale Dialog */}

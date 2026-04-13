@@ -174,16 +174,17 @@ export default function Clientes() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Users className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Users className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
             Clientes
           </h1>
-          <p className="text-muted-foreground mt-1">Gestion de clientes en Honduras</p>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">Gestión de clientes en Honduras</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Nuevo Cliente
+        <Button onClick={openCreate} className="gap-2 flex-shrink-0 h-11">
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nuevo Cliente</span>
         </Button>
       </div>
 

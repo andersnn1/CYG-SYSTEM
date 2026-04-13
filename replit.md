@@ -20,14 +20,31 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Application: Gestión de Inventario y Ventas
 
-A professional inventory and sales management system for a small Honduran business. Features:
+A professional inventory and sales management system for C&G Electronics, a small Honduran business. Features:
 
-- **Dashboard**: Total income, Profit First breakdown (50% Operación, 30% Dueño, 15% Impuestos, 5% Ganancia), monthly bar charts, top products
+- **Dashboard**: Total income, Profit First breakdown, monthly bar charts, top products, sales goal tracking
 - **Perfumería**: Inventory of fragrances with brand, ml, stock, cost/sale prices, low stock alerts
 - **Sublimación**: Dual inventory for machinery and consumables
-- **Clientes**: Customer management with all 18 Honduras departments
+- **Clientes**: Customer management with all 18 Honduras departments, invoice history panel
 - **Ventas**: Sales registration with instant net profit calculation, client association, monthly filters
-- **Reportes**: Monthly reports with Profit First breakdown, PDF export via window.print()
+- **Facturas**: Full invoicing system with line items, status management, PDF print
+- **Cotizaciones**: Quote management
+- **Gastos**: Monthly expense tracking by category
+- **Combos**: Product bundle management
+- **Reportes**: Monthly reports with Profit First breakdown, PDF export
+
+## Mobile-Responsive Design
+
+Fully responsive with Tailwind breakpoints. Key patterns:
+
+- **Mobile navigation**: Sticky bottom bar (`md:hidden`) with 5 primary items (Dashboard, Perfumería, Clientes, Ventas, Facturas) + "Más" drawer for secondary items (Sublimación, Reportes, Cotizaciones, Gastos, Combos)
+- **Desktop navigation**: Left sidebar (hidden on mobile, `hidden md:flex`)
+- **Mobile header**: Sticky top bar with brand name "C&G Electronics" + theme toggle
+- **Tables → Cards**: On screens smaller than `sm` breakpoint, all data tables switch to stacked card layout. Desktop table wrapped in `hidden sm:block`, mobile cards in `sm:hidden`
+- **Touch targets**: Primary action buttons are `h-11` (44px) on mobile
+- **Button labels**: Hidden on mobile via `hidden sm:inline`, icon-only for compact headers
+- **Page headings**: `text-2xl sm:text-3xl`, icons `h-6 w-6 sm:h-8 sm:w-8`
+- **Content padding**: `pb-24 md:pb-8` to clear the mobile bottom nav
 
 ## Key Commands
 

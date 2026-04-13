@@ -104,17 +104,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Resumen general de tu negocio</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Resumen general de tu negocio</p>
         </div>
         <Button
           variant="outline"
-          className="gap-2"
+          className="gap-2 flex-shrink-0 h-11"
           onClick={handleExportBackup}
         >
-          <Download className="h-4 w-4" /> Exportar Respaldo
+          <Download className="h-4 w-4" />
+          <span className="hidden sm:inline">Exportar Respaldo</span>
         </Button>
       </div>
 
