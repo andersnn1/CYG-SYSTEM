@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, departments } from "@/lib/format";
 import {
   Plus, Trash2, ClipboardList, CheckCircle, XCircle, Clock,
-  Search, X, ChevronDown, ChevronUp, ArrowLeft, Send, FileText, Printer,
+  Search, X, ChevronDown, ChevronUp, ArrowLeft, Send, FileText, Printer, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -221,6 +221,62 @@ function buildQuoteHtml(quote: Quote): string {
 }
 
 /**
+ * Genera y descarga la cotización directamente como PDF al dispositivo,
+ * sin pasar por el diálogo de impresión.
+ */
+async function downloadQuotePdf(
+  quote: Quote,
+  onStart: () => void,
+  onDone: () => void,
+) {
+  onStart();
+  try {
+    const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+      import("jspdf"),
+      import("html2canvas"),
+    ]);
+
+    const html = buildQuoteHtml(quote);
+
+    // Render HTML in a hidden fixed iframe (same origin → html2canvas works)
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText =
+      "position:fixed;left:-9999px;top:0;width:816px;height:1056px;visibility:hidden;border:none;";
+    document.body.appendChild(iframe);
+
+    try {
+      const doc = iframe.contentDocument!;
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      // Allow images (logo) time to load before capture
+      await new Promise(r => setTimeout(r, 900));
+
+      const canvas = await html2canvas(doc.body, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        width: 816,
+        height: 1056,
+        windowWidth: 816,
+        windowHeight: 1056,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
+      pdf.addImage(imgData, "JPEG", 0, 0, 216, 279);
+      pdf.save(`cotizacion-${quote.quoteNumber}.pdf`);
+    } finally {
+      document.body.removeChild(iframe);
+    }
+  } finally {
+    onDone();
+  }
+}
+
+/**
  * Escribe el HTML de la cotización en una ventana y dispara impresión.
  * Si se pasa `win`, escribe ahí (ventana ya abierta antes del await).
  * Si no, abre una ventana nueva (solo viable desde un gesto de usuario directo).
@@ -376,7 +432,10 @@ function QuotePrintView({ quote }: { quote: Quote }) {
 }
 
 // Modal de vista previa — solo muestra el documento, sin auto-imprimir
-function QuotePrintModal({ quote, onPrint, onClose }: { quote: Quote; onPrint: () => void; onClose: () => void }) {
+function QuotePrintModal({ quote, onPrint, onClose, onDownload, downloading }: {
+  quote: Quote; onPrint: () => void; onClose: () => void;
+  onDownload: () => void; downloading: boolean;
+}) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [scale, setScale] = React.useState(1);
   const DOC_WIDTH = 816; // 216mm at 96dpi
@@ -401,9 +460,20 @@ function QuotePrintModal({ quote, onPrint, onClose }: { quote: Quote; onPrint: (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.6)", display: "flex", flexDirection: "column" }}>
       <div style={{ background: "#1e293b", color: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", gap: "12px", flexWrap: "wrap" }}>
         <span style={{ fontSize: "13px", fontWeight: 600 }}>{quote.quoteNumber}</span>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            onClick={onDownload}
+            disabled={downloading}
+            style={{ ...btnBase, background: "#16a34a", color: "#fff", opacity: downloading ? 0.7 : 1 }}
+          >
+            {downloading
+              ? <span style={{ width: 14, height: 14, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spin 0.6s linear infinite" }} />
+              : <Download size={14} />
+            }
+            Descargar PDF
+          </button>
           <button onClick={onPrint} style={{ ...btnBase, background: "#4472C4", color: "#fff" }}>
-            <Printer size={14} /> Imprimir / PDF
+            <Printer size={14} /> Imprimir
           </button>
           <button onClick={onClose} style={{ ...btnBase, background: "transparent", color: "#94a3b8", border: "1px solid #334155" }}>
             Cerrar
@@ -490,6 +560,7 @@ export default function Cotizaciones() {
 
   const [printQuote, setPrintQuote] = useState<Quote | null>(null);
   const printWinRef = useRef<Window | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [products, setProducts] = useState<ProductOption[]>([]);
 
   /**
@@ -510,6 +581,20 @@ export default function Cotizaciones() {
       printQuoteWindow(full, win);   // escribe HTML en la ventana ya abierta
     } catch {
       win.close();
+    }
+  };
+
+  const handleDownloadClick = async (quoteId: number) => {
+    if (downloadingId) return;
+    setDownloadingId(quoteId);
+    try {
+      const full: Quote = await apiFetch(`/quotes/${quoteId}`);
+      await downloadQuotePdf(full, () => {}, () => {});
+      toast({ title: "PDF descargado", description: `cotizacion-${full.quoteNumber}.pdf` });
+    } catch (err: any) {
+      toast({ title: "Error al descargar", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -993,12 +1078,17 @@ export default function Cotizaciones() {
                     >
                       Abrir
                     </button>
+                    {/* Download PDF — avoids print dialog on mobile */}
                     <button
-                      title="Imprimir / PDF"
-                      className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                      onClick={e => handlePrintClick(e, q.id)}
+                      title="Descargar PDF"
+                      disabled={downloadingId === q.id}
+                      className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors disabled:opacity-50"
+                      onClick={() => handleDownloadClick(q.id)}
                     >
-                      <Printer className="h-5 w-5" />
+                      {downloadingId === q.id
+                        ? <span className="h-5 w-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        : <Download className="h-5 w-5" />
+                      }
                     </button>
                     {q.status !== "convertida" && q.status !== "rechazada" && (
                       <button
@@ -1024,7 +1114,15 @@ export default function Cotizaciones() {
         )}
 
         {/* Print Modal — vista previa */}
-        {printQuote && <QuotePrintModal quote={printQuote} onPrint={() => printQuoteWindow(printQuote)} onClose={() => setPrintQuote(null)} />}
+        {printQuote && (
+          <QuotePrintModal
+            quote={printQuote}
+            onPrint={() => printQuoteWindow(printQuote)}
+            onClose={() => setPrintQuote(null)}
+            onDownload={() => handleDownloadClick(printQuote.id)}
+            downloading={downloadingId === printQuote.id}
+          />
+        )}
 
         {/* Delete AlertDialog */}
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -1488,7 +1586,15 @@ export default function Cotizaciones() {
       </AlertDialog>
 
       {/* Print Modal — disponible tanto en list como en form view */}
-      {printQuote && <QuotePrintModal quote={printQuote} onPrint={() => printQuoteWindow(printQuote)} onClose={() => setPrintQuote(null)} />}
+      {printQuote && (
+        <QuotePrintModal
+          quote={printQuote}
+          onPrint={() => printQuoteWindow(printQuote)}
+          onClose={() => setPrintQuote(null)}
+          onDownload={() => handleDownloadClick(printQuote.id)}
+          downloading={downloadingId === printQuote.id}
+        />
+      )}
 
       {/* Convert AlertDialog */}
       <AlertDialog open={convertOpen} onOpenChange={setConvertOpen}>
