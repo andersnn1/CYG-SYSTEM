@@ -1,0 +1,1153 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification for Gestión de Inventario y Ventas
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: dashboard
+    description: Dashboard and summary operations
+  - name: perfumery
+    description: Perfumery inventory operations
+  - name: sublimation
+    description: Sublimation inventory operations
+  - name: clients
+    description: Client management operations
+  - name: sales
+    description: Sales operations
+  - name: reports
+    description: Report generation operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary
+      description: Returns total income, profit first breakdown, and totals
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/sales-chart:
+    get:
+      operationId: getSalesChart
+      tags: [dashboard]
+      summary: Get monthly sales chart data
+      parameters:
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Monthly sales data for chart
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesChartPoint"
+
+  /dashboard/top-products:
+    get:
+      operationId: getTopProducts
+      tags: [dashboard]
+      summary: Get top selling products
+      responses:
+        "200":
+          description: Top products by revenue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopProduct"
+
+  /perfumery:
+    get:
+      operationId: listPerfumery
+      tags: [perfumery]
+      summary: List all perfumery items
+      responses:
+        "200":
+          description: List of perfumery products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PerfumeryItem"
+    post:
+      operationId: createPerfumeryItem
+      tags: [perfumery]
+      summary: Create a perfumery item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePerfumeryItemBody"
+      responses:
+        "201":
+          description: Created perfumery item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerfumeryItem"
+        "400":
+          description: Bad request
+
+  /perfumery/{id}:
+    get:
+      operationId: getPerfumeryItem
+      tags: [perfumery]
+      summary: Get a perfumery item by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Perfumery item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerfumeryItem"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePerfumeryItem
+      tags: [perfumery]
+      summary: Update a perfumery item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePerfumeryItemBody"
+      responses:
+        "200":
+          description: Updated perfumery item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerfumeryItem"
+        "404":
+          description: Not found
+    delete:
+      operationId: deletePerfumeryItem
+      tags: [perfumery]
+      summary: Delete a perfumery item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /sublimation:
+    get:
+      operationId: listSublimationItems
+      tags: [sublimation]
+      summary: List all sublimation items
+      responses:
+        "200":
+          description: List of sublimation items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SublimationItem"
+    post:
+      operationId: createSublimationItem
+      tags: [sublimation]
+      summary: Create a sublimation item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSublimationItemBody"
+      responses:
+        "201":
+          description: Created sublimation item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SublimationItem"
+        "400":
+          description: Bad request
+
+  /sublimation/{id}:
+    get:
+      operationId: getSublimationItem
+      tags: [sublimation]
+      summary: Get a sublimation item by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sublimation item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SublimationItem"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSublimationItem
+      tags: [sublimation]
+      summary: Update a sublimation item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSublimationItemBody"
+      responses:
+        "200":
+          description: Updated sublimation item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SublimationItem"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSublimationItem
+      tags: [sublimation]
+      summary: Delete a sublimation item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List all clients
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Create a client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientBody"
+      responses:
+        "201":
+          description: Created client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "400":
+          description: Bad request
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get a client by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientBody"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteClient
+      tags: [clients]
+      summary: Delete a client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /sales:
+    get:
+      operationId: listSales
+      tags: [sales]
+      summary: List all sales
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of sales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sale"
+    post:
+      operationId: createSale
+      tags: [sales]
+      summary: Create a sale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaleBody"
+      responses:
+        "201":
+          description: Created sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          description: Bad request
+
+  /sales/{id}:
+    get:
+      operationId: getSale
+      tags: [sales]
+      summary: Get a sale by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSale
+      tags: [sales]
+      summary: Update a sale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSaleBody"
+      responses:
+        "200":
+          description: Updated sale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+        "400":
+          description: Bad request
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSale
+      tags: [sales]
+      summary: Delete a sale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /expenses:
+    get:
+      operationId: listExpenses
+      tags: [expenses]
+      summary: List expenses
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+    post:
+      operationId: createExpense
+      tags: [expenses]
+      summary: Create an expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseBody"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+
+  /expenses/{id}:
+    delete:
+      operationId: deleteExpense
+      tags: [expenses]
+      summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /monthly-goal:
+    get:
+      operationId: getMonthlyGoal
+      tags: [goals]
+      summary: Get monthly goal for a given month/year
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Monthly goal (null if not set)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyGoal"
+    put:
+      operationId: setMonthlyGoal
+      tags: [goals]
+      summary: Create or update monthly goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetMonthlyGoalBody"
+      responses:
+        "200":
+          description: Saved goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyGoal"
+
+  /reports/monthly:
+    get:
+      operationId: getMonthlyReport
+      tags: [reports]
+      summary: Get monthly report data
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Monthly report data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyReport"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalIncome:
+          type: number
+        totalCost:
+          type: number
+        totalShipping:
+          type: number
+        fondoReposicion:
+          type: number
+        netProfit:
+          type: number
+        distributableProfit:
+          type: number
+        profitFirst:
+          $ref: "#/components/schemas/ProfitFirst"
+        totalSales:
+          type: integer
+        totalClients:
+          type: integer
+        lowStockCount:
+          type: integer
+      required:
+        - totalIncome
+        - totalCost
+        - totalShipping
+        - fondoReposicion
+        - netProfit
+        - distributableProfit
+        - profitFirst
+        - totalSales
+        - totalClients
+        - lowStockCount
+
+    ProfitFirst:
+      type: object
+      properties:
+        operacion:
+          type: number
+        dueno:
+          type: number
+        ganancia:
+          type: number
+      required:
+        - operacion
+        - dueno
+        - ganancia
+
+    SalesChartPoint:
+      type: object
+      properties:
+        month:
+          type: string
+        income:
+          type: number
+        profit:
+          type: number
+      required:
+        - month
+        - income
+        - profit
+
+    TopProduct:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        revenue:
+          type: number
+        unitsSold:
+          type: integer
+      required:
+        - name
+        - category
+        - revenue
+        - unitsSold
+
+    PerfumeryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        brand:
+          type: string
+        ml:
+          type: integer
+        stock:
+          type: integer
+        costPrice:
+          type: number
+        salePrice:
+          type: number
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - brand
+        - ml
+        - stock
+        - costPrice
+        - salePrice
+        - createdAt
+        - updatedAt
+
+    CreatePerfumeryItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        brand:
+          type: string
+        ml:
+          type: integer
+        stock:
+          type: integer
+        costPrice:
+          type: number
+        salePrice:
+          type: number
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+        - brand
+        - ml
+        - stock
+        - costPrice
+        - salePrice
+
+    UpdatePerfumeryItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        brand:
+          type: string
+        ml:
+          type: integer
+        stock:
+          type: integer
+        costPrice:
+          type: number
+        salePrice:
+          type: number
+        description:
+          type: ["string", "null"]
+
+    SublimationItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        itemType:
+          type: string
+          enum: [maquinaria, consumible]
+        stock:
+          type: ["integer", "null"]
+        costPrice:
+          type: number
+        salePrice:
+          type: number
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - category
+        - itemType
+        - costPrice
+        - salePrice
+        - createdAt
+        - updatedAt
+
+    CreateSublimationItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        itemType:
+          type: string
+          enum: [maquinaria, consumible]
+        stock:
+          type: ["integer", "null"]
+        costPrice:
+          type: number
+        salePrice:
+          type: number
+        description:
+          type: ["string", "null"]
+      required:
+        - name
+        - category
+        - itemType
+        - costPrice
+        - salePrice
+
+    UpdateSublimationItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        itemType:
+          type: string
+          enum: [maquinaria, consumible]
+        stock:
+          type: ["integer", "null"]
+        costPrice:
+          type: number
+        salePrice:
+          type: number
+        description:
+          type: ["string", "null"]
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        city:
+          type: string
+        department:
+          type: string
+        address:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - city
+        - department
+        - createdAt
+        - updatedAt
+
+    CreateClientBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        city:
+          type: string
+        department:
+          type: string
+        address:
+          type: ["string", "null"]
+      required:
+        - name
+        - city
+        - department
+
+    UpdateClientBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        city:
+          type: string
+        department:
+          type: string
+        address:
+          type: ["string", "null"]
+
+    Sale:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: ["integer", "null"]
+        clientName:
+          type: ["string", "null"]
+        productType:
+          type: string
+          enum: [perfumeria, sublimacion]
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        costPrice:
+          type: number
+        shippingCost:
+          type: number
+        totalAmount:
+          type: number
+        netProfit:
+          type: number
+        notes:
+          type: ["string", "null"]
+        saleDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - productType
+        - productId
+        - productName
+        - quantity
+        - unitPrice
+        - costPrice
+        - shippingCost
+        - totalAmount
+        - netProfit
+        - saleDate
+        - createdAt
+
+    CreateSaleBody:
+      type: object
+      properties:
+        clientId:
+          type: ["integer", "null"]
+        productType:
+          type: string
+          enum: [perfumeria, sublimacion]
+        productId:
+          type: integer
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        shippingCost:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        saleDate:
+          type: string
+      required:
+        - productType
+        - productId
+        - quantity
+        - unitPrice
+        - saleDate
+
+    UpdateSaleBody:
+      type: object
+      properties:
+        clientId:
+          type: ["integer", "null"]
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        costPrice:
+          type: number
+        shippingCost:
+          type: number
+        notes:
+          type: ["string", "null"]
+        saleDate:
+          type: string
+
+    MonthlyReport:
+      type: object
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        totalIncome:
+          type: number
+        totalCost:
+          type: number
+        netProfit:
+          type: number
+        profitFirst:
+          $ref: "#/components/schemas/ProfitFirst"
+        totalSales:
+          type: integer
+        sales:
+          type: array
+          items:
+            $ref: "#/components/schemas/Sale"
+        topClients:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopClient"
+        categoryBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryBreakdown"
+      required:
+        - month
+        - year
+        - totalIncome
+        - totalCost
+        - netProfit
+        - profitFirst
+        - totalSales
+        - sales
+        - topClients
+        - categoryBreakdown
+
+    TopClient:
+      type: object
+      properties:
+        clientId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        totalPurchases:
+          type: number
+        salesCount:
+          type: integer
+      required:
+        - clientName
+        - totalPurchases
+        - salesCount
+
+    CategoryBreakdown:
+      type: object
+      properties:
+        category:
+          type: string
+        totalSales:
+          type: integer
+        totalRevenue:
+          type: number
+      required:
+        - category
+        - totalSales
+        - totalRevenue
+
+    Expense:
+      type: object
+      properties:
+        id:
+          type: integer
+        amount:
+          type: number
+        category:
+          type: string
+        description:
+          type: ["string", "null"]
+        expenseDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - amount
+        - category
+        - expenseDate
+        - createdAt
+
+    CreateExpenseBody:
+      type: object
+      properties:
+        amount:
+          type: number
+        category:
+          type: string
+        description:
+          type: ["string", "null"]
+        expenseDate:
+          type: string
+      required:
+        - amount
+        - category
+        - expenseDate
+
+    MonthlyGoal:
+      type: object
+      properties:
+        id:
+          type: integer
+        month:
+          type: integer
+        year:
+          type: integer
+        targetAmount:
+          type: number
+        createdAt:
+          type: string
+      required:
+        - id
+        - month
+        - year
+        - targetAmount
+        - createdAt
+
+    SetMonthlyGoalBody:
+      type: object
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        targetAmount:
+          type: number
+      required:
+        - month
+        - year
+        - targetAmount

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PGPASSWORD=admin123 npx drizzle-kit push --config=drizzle.config.json)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm install:*)",
+      "Bash(PORT=5173 BASE_PATH=/ pnpm dev)",
+      "Bash(ipconfig)",
+      "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(powershell -Command \"netstat -an | findstr ':5174'\")",
+      "Bash(powershell -Command \"netstat -an | Select-String ':5174'\")",
+      "Bash(powershell -Command \"netstat -ano | Select-String ':3000|:5173' | Select-String 'LISTENING'\")",
+      "Bash(npx tsc:*)",
+      "Bash(powershell -Command \"netstat -ano | Select-String ':5173' | Select-String 'LISTENING'\")",
+      "Bash(powershell -Command \"netstat -ano | Select-String ':3000' | Select-String 'LISTENING'\")",
+      "Bash(grep -l \"CreatePerfumeryItemBody\\\\|CreateSublimationItemBody\" \"/c/Users/Andersn/Desktop/CandG-Electronics/lib/api-zod/src/generated/api/\"*.ts)",
+      "Bash(pnpm --filter @workspace/db exec drizzle-kit push)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:admin123@localhost:5433/candg_electronics\" npx drizzle-kit push)",
+      "Bash(cross-env DATABASE_URL=\"postgresql://postgres:admin123@localhost:5433/candg_electronics\" pnpm drizzle-kit push)",
+      "Bash(cmd /c \"set DATABASE_URL=postgresql://postgres:admin123@localhost:5433/candg_electronics && pnpm drizzle-kit push\")",
+      "Bash(PGPASSWORD=admin123 \"/c/Program Files/PostgreSQL/18/bin/psql\" -h localhost -p 5433 -U postgres -d candg_electronics -f \"c:/Users/Andersn/Desktop/CandG-Electronics/lib/db/migrations/0011_add_invoice_id_to_sales.sql\")"
+    ]
+  }
+}
