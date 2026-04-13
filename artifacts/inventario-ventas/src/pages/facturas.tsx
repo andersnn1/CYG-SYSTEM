@@ -1173,23 +1173,24 @@ export default function Facturas() {
     return (
       <div className="space-y-5 animate-in fade-in duration-200">
         {/* Top bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <FileText className="h-6 w-6 text-foreground" />
-            <h1 className="text-2xl font-bold text-foreground">Facturas</h1>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-foreground flex-shrink-0" />
+            <h1 className="text-2xl sm:text-2xl font-bold text-foreground">Facturas</h1>
           </div>
-          <Button onClick={openCreate} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-            <Plus className="h-4 w-4" /> Nueva Factura
+          <Button onClick={openCreate} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold flex-shrink-0 h-11">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Nueva Factura</span>
           </Button>
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              className="pl-9 w-64 bg-background"
+              className="pl-9 w-full sm:w-64 bg-background"
               placeholder="Buscar por cliente o número..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -1204,8 +1205,8 @@ export default function Facturas() {
             )}
           </div>
 
-          {/* Status buttons */}
-          <div className="flex items-center gap-1.5">
+          {/* Status buttons — scrollable on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
             {(["all", "pendiente", "pagada", "cancelada"] as const).map(s => {
               const labels: Record<string, string> = { all: "Todas", pendiente: "Pendientes", pagada: "Pagadas", cancelada: "Canceladas" };
               const count = counts[s];
@@ -1214,7 +1215,7 @@ export default function Facturas() {
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${active
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border whitespace-nowrap flex-shrink-0 ${active
                     ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                     : "bg-background text-muted-foreground border-border hover:border-blue-300 hover:text-foreground"
                     }`}
@@ -1229,7 +1230,7 @@ export default function Facturas() {
             })}
           </div>
 
-          <span className="text-sm text-muted-foreground ml-auto">
+          <span className="text-sm text-muted-foreground sm:ml-auto">
             {filtered.length} {filtered.length === 1 ? "factura" : "facturas"}
           </span>
         </div>
@@ -1256,127 +1257,265 @@ export default function Facturas() {
             </p>
           </div>
         ) : (
-          <div className="bg-card rounded-xl border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Número</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha Emisión</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Vencimiento</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Método Pago</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
-                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Logística</th>
-                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                  <th className="w-10" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((inv, idx) => (
-                  <tr
-                    key={inv.id}
-                    className={`hover:bg-muted/50 transition-colors border-b last:border-b-0 ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
-                  >
-                    <td className="px-4 py-3 font-mono font-semibold text-foreground cursor-pointer" onClick={() => openEdit(inv)}>{inv.invoiceNumber}</td>
-                    <td className="px-4 py-3 font-medium text-foreground max-w-[180px] truncate cursor-pointer" onClick={() => openEdit(inv)}>{inv.clientName}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell cursor-pointer" onClick={() => openEdit(inv)}>{inv.issueDate}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell cursor-pointer" onClick={() => openEdit(inv)}>
-                      {inv.dueDate ?? <span className="text-muted-foreground/50">—</span>}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell cursor-pointer" onClick={() => openEdit(inv)}>
-                      {inv.paymentMethod ? (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium border">
-                          <CreditCard className="h-3 w-3" />
-                          {PAYMENT_LABELS[inv.paymentMethod] ?? inv.paymentMethod}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/50">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 cursor-pointer" onClick={() => openEdit(inv)}>
-                      <StatusBadge status={inv.status} />
-                    </td>
-                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                      <div className="flex flex-col gap-1.5 items-start">
-                        <div className="flex items-center gap-2">
-                          <GuideBadge status={inv.estadoEntrega} />
-                          {inv.estadoEntrega !== 'Entregado' && (
-                            <button
-                               title="Marcar como Entregado"
-                               onClick={() => markEntregado(inv.id)}
-                               className="bg-green-600 hover:bg-green-700 text-white rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors shadow-sm"
-                            >
-                              Entregado ✓
+          <>
+            {/* ── Desktop Table ── */}
+            <div className="hidden sm:block bg-card rounded-xl border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Número</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Cliente</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">Fecha Emisión</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Vencimiento</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">Método Pago</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Estado</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Logística</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
+                    <th className="w-10" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((inv, idx) => (
+                    <tr
+                      key={inv.id}
+                      className={`hover:bg-muted/50 transition-colors border-b last:border-b-0 ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
+                    >
+                      <td className="px-4 py-3 font-mono font-semibold text-foreground cursor-pointer" onClick={() => openEdit(inv)}>{inv.invoiceNumber}</td>
+                      <td className="px-4 py-3 font-medium text-foreground max-w-[180px] truncate cursor-pointer" onClick={() => openEdit(inv)}>{inv.clientName}</td>
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell cursor-pointer" onClick={() => openEdit(inv)}>{inv.issueDate}</td>
+                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell cursor-pointer" onClick={() => openEdit(inv)}>
+                        {inv.dueDate ?? <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell cursor-pointer" onClick={() => openEdit(inv)}>
+                        {inv.paymentMethod ? (
+                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-medium border">
+                            <CreditCard className="h-3 w-3" />
+                            {PAYMENT_LABELS[inv.paymentMethod] ?? inv.paymentMethod}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/50">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => openEdit(inv)}>
+                        <StatusBadge status={inv.status} />
+                      </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col gap-1.5 items-start">
+                          <div className="flex items-center gap-2">
+                            <GuideBadge status={inv.estadoEntrega} />
+                            {inv.estadoEntrega !== 'Entregado' && (
+                              <button
+                                title="Marcar como Entregado"
+                                onClick={() => markEntregado(inv.id)}
+                                className="bg-green-600 hover:bg-green-700 text-white rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors shadow-sm"
+                              >
+                                Entregado ✓
+                              </button>
+                            )}
+                          </div>
+                          {inv.numeroGuia || inv.fotoGuiaPath ? (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 py-0.5 px-1.5 rounded-md border">
+                              {inv.numeroGuia && (
+                                <>
+                                  <span className="font-mono font-medium">{inv.transportista ? `${inv.transportista}-` : ""}{inv.numeroGuia}</span>
+                                  <button title="Copiar" onClick={() => { navigator.clipboard.writeText(inv.numeroGuia!); toast({title: "Copiado"}) }} className="hover:text-foreground">
+                                    <Copy className="h-3 w-3" />
+                                  </button>
+                                  <a
+                                    title="Rastrear"
+                                    href={
+                                      inv.transportista === "Forza" ? `https://forzadelivery.com/rastreo?guia=${inv.numeroGuia}` :
+                                      inv.transportista === "CAEX" ? `https://caexlogistics.com/rastreo/?guia=${inv.numeroGuia}` :
+                                      `https://c807.com/tracking?guide=${inv.numeroGuia}`
+                                    }
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="hover:text-blue-600"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                </>
+                              )}
+                              {inv.fotoGuiaPath && (
+                                <button title="Ver Evidencia" onClick={() => { setGuidePreviewUrl(inv.fotoGuiaPath!); setGuideModalOpen(true); }} className="hover:text-blue-600 ml-1">
+                                  <ImageIcon className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              {!inv.fotoGuiaPath && (
+                                <button title="Subir Foto" onClick={() => openGuideModal(inv)} className="hover:text-blue-600 ml-1">
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <button onClick={() => openGuideModal(inv)} className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-0.5 rounded font-semibold border border-blue-200 transition-colors">
+                              + Subir Guía
                             </button>
                           )}
                         </div>
-                        {inv.numeroGuia || inv.fotoGuiaPath ? (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 py-0.5 px-1.5 rounded-md border">
-                            {inv.numeroGuia && (
-                               <>
-                                 <span className="font-mono font-medium">{inv.transportista ? `${inv.transportista}-` : ""}{inv.numeroGuia}</span>
-                                 <button title="Copiar" onClick={() => { navigator.clipboard.writeText(inv.numeroGuia!); toast({title: "Copiado"}) }} className="hover:text-foreground">
-                                   <Copy className="h-3 w-3" />
-                                 </button>
-                                 <a 
-                                   title="Rastrear" 
-                                   href={
-                                     inv.transportista === "Forza" ? `https://forzadelivery.com/rastreo?guia=${inv.numeroGuia}` :
-                                     inv.transportista === "CAEX" ? `https://caexlogistics.com/rastreo/?guia=${inv.numeroGuia}` : 
-                                     `https://c807.com/tracking?guide=${inv.numeroGuia}`
-                                   } 
-                                   target="_blank" 
-                                   rel="noreferrer" 
-                                   className="hover:text-blue-600"
-                                 >
-                                   <ExternalLink className="h-3 w-3" />
-                                 </a>
-                               </>
-                             )}
-                             {inv.fotoGuiaPath && (
-                               <button title="Ver Evidencia" onClick={() => { setGuidePreviewUrl(inv.fotoGuiaPath!); setGuideModalOpen(true); }} className="hover:text-blue-600 ml-1">
-                                 <ImageIcon className="h-3.5 w-3.5" />
-                               </button>
-                             )}
-                             {!inv.fotoGuiaPath && (
-                               <button title="Subir Foto" onClick={() => openGuideModal(inv)} className="hover:text-blue-600 ml-1">
-                                 <Plus className="h-3 w-3" />
-                               </button>
-                             )}
-                          </div>
-                        ) : (
-                          <button onClick={() => openGuideModal(inv)} className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-0.5 rounded font-semibold border border-blue-200 transition-colors">
-                            + Subir Guía
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-foreground cursor-pointer" onClick={() => openEdit(inv)}>
+                        {formatCurrency(inv.total)}
+                      </td>
+                      <td className="px-2 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            title="Enviar por WhatsApp"
+                            onClick={e => { e.stopPropagation(); handleWhatsApp(inv); }}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </button>
+                          <button
+                            title="Imprimir / PDF"
+                            onClick={e => { e.stopPropagation(); openPrint(inv); }}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Mobile Cards ── */}
+            <div className="sm:hidden space-y-3">
+              {filtered.map(inv => (
+                <div key={inv.id} className="bg-card border border-border rounded-xl overflow-hidden">
+
+                  {/* Card header: number + status + total */}
+                  <div
+                    className="px-4 pt-4 pb-3 cursor-pointer"
+                    onClick={() => openEdit(inv)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-foreground">{inv.invoiceNumber}</span>
+                          <StatusBadge status={inv.status} />
+                        </div>
+                        <p className="font-semibold text-foreground mt-1 truncate">{inv.clientName}</p>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          <span className="text-xs text-muted-foreground">{inv.issueDate}</span>
+                          {inv.paymentMethod && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <CreditCard className="h-3 w-3" />
+                              {PAYMENT_LABELS[inv.paymentMethod] ?? inv.paymentMethod}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xl font-bold text-foreground">{formatCurrency(inv.total)}</p>
+                        {inv.dueDate && (
+                          <p className="text-xs text-muted-foreground mt-0.5">Vence: {inv.dueDate}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logistics section */}
+                  <div className="px-4 py-3 border-t border-border/60 bg-muted/20">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <GuideBadge status={inv.estadoEntrega} />
+                      {inv.estadoEntrega !== 'Entregado' && (
+                        <button
+                          onClick={() => markEntregado(inv.id)}
+                          className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold transition-colors"
+                        >
+                          Entregado ✓
+                        </button>
+                      )}
+                    </div>
+
+                    {inv.numeroGuia || inv.fotoGuiaPath ? (
+                      <div className="mt-2 flex items-center gap-2 bg-background px-3 py-2 rounded-lg border text-sm text-muted-foreground">
+                        {inv.numeroGuia && (
+                          <>
+                            <span className="font-mono font-semibold text-foreground">
+                              {inv.transportista ? `${inv.transportista} · ` : ""}{inv.numeroGuia}
+                            </span>
+                            <button
+                              title="Copiar número de guía"
+                              onClick={() => { navigator.clipboard.writeText(inv.numeroGuia!); toast({ title: "Copiado" }); }}
+                              className="ml-auto p-1 rounded hover:bg-muted transition-colors"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                            <a
+                              title="Rastrear envío"
+                              href={
+                                inv.transportista === "Forza" ? `https://forzadelivery.com/rastreo?guia=${inv.numeroGuia}` :
+                                inv.transportista === "CAEX" ? `https://caexlogistics.com/rastreo/?guia=${inv.numeroGuia}` :
+                                `https://c807.com/tracking?guide=${inv.numeroGuia}`
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 rounded hover:bg-muted hover:text-blue-600 transition-colors"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </>
+                        )}
+                        {inv.fotoGuiaPath && (
+                          <button
+                            title="Ver foto de evidencia"
+                            onClick={() => { setGuidePreviewUrl(inv.fotoGuiaPath!); setGuideModalOpen(true); }}
+                            className="p-1 rounded hover:bg-muted hover:text-blue-600 transition-colors"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </button>
+                        )}
+                        {!inv.fotoGuiaPath && (
+                          <button
+                            title="Subir foto de evidencia"
+                            onClick={() => openGuideModal(inv)}
+                            className="p-1 rounded hover:bg-muted hover:text-blue-600 transition-colors"
+                          >
+                            <Plus className="h-4 w-4" />
                           </button>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-foreground cursor-pointer" onClick={() => openEdit(inv)}>
-                      {formatCurrency(inv.total)}
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          title="Enviar por WhatsApp"
-                          onClick={e => { e.stopPropagation(); handleWhatsApp(inv); }}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                        </button>
-                        <button
-                          title="Imprimir / PDF"
-                          onClick={e => { e.stopPropagation(); openPrint(inv); }}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        >
-                          <Printer className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    ) : (
+                      <button
+                        onClick={() => openGuideModal(inv)}
+                        className="mt-2 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-semibold border border-blue-200 dark:border-blue-800 transition-colors"
+                      >
+                        + Subir Guía de Envío
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Action bar */}
+                  <div className="flex border-t border-border/60 divide-x divide-border/60">
+                    <button
+                      className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      onClick={() => openEdit(inv)}
+                    >
+                      Abrir
+                    </button>
+                    <button
+                      title="Enviar por WhatsApp"
+                      className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                      onClick={() => handleWhatsApp(inv)}
+                    >
+                      <MessageCircle className="h-5 w-5" />
+                    </button>
+                    <button
+                      title="Imprimir / PDF"
+                      className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      onClick={() => openPrint(inv)}
+                    >
+                      <Printer className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Delete AlertDialog */}
