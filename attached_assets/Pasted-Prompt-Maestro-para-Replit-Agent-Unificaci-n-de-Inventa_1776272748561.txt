@@ -1,0 +1,34 @@
+Prompt Maestro para Replit Agent (Unificación de Inventario)
+"Actúa como un Senior Fullstack Developer y Arquitecto de Base de Datos. Necesito unificar dos módulos de mi sistema 'C&G Electronics' para centralizar la gestión de productos.
+
+Implementa los siguientes requerimientos paso a paso usando React, TypeScript, Tailwind CSS, Lucide React y Drizzle ORM:
+
+1. Reestructuración de la Navegación (Sidebar/Navbar):
+
+Elimina las opciones individuales de 'Perfumería' y 'Sublimación' del menú lateral o barra de navegación.
+
+En su lugar, crea una única opción principal llamada 'Inventario'. Utiliza un icono representativo como Package o Archive de lucide-react.
+
+2. Modificación del Esquema de Base de Datos (Drizzle ORM):
+
+Analiza cómo están estructurados los productos actualmente. Debemos tener una tabla unificada (ej. products o inventory).
+
+Añade una nueva columna obligatoria llamada category (tipo text o enum).
+
+Esta columna debe aceptar los valores (o tener las opciones): 'Sublimación', 'Perfumería' y 'Otros'.
+
+Genera la migración necesaria para este cambio de esquema sin perder los datos actuales.
+
+3. Nueva Vista de 'Inventario' (UI/UX):
+
+Crea un nuevo componente/página para el Inventario.
+
+Diseña una tabla moderna o un grid de tarjetas que muestre todos los productos juntos (nombre, stock, precio, categoría).
+
+Funcionalidad clave: Incorpora un sistema de filtros en la parte superior (pueden ser 'Tabs' o un menú desplegable 'Select') que permita al usuario ver 'Todos', o filtrar rápidamente para ver solo 'Sublimación' o solo 'Perfumería'.
+
+4. Ajustes en la Creación de Productos:
+
+En el formulario para agregar o editar un producto, añade un selector (Dropdown) para que el usuario pueda elegir obligatoriamente a qué categoría pertenece el artículo (Sublimación o Perfumería) al momento de guardarlo.
+
+Mantén el código limpio, reutiliza componentes de UI si ya existen (como modales o tablas base) y asegura que TypeScript no tenga errores de tipado con la nueva columna de categoría."

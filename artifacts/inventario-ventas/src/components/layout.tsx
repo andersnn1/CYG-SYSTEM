@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
-  Droplets,
-  Printer,
+  Archive,
   Users,
   ShoppingCart,
   FileText,
@@ -25,8 +24,7 @@ const NAV_ITEMS = [
   { href: "/ventas", label: "Ventas", icon: ShoppingCart },
   { href: "/facturas", label: "Facturas", icon: Receipt },
   { href: "/clientes", label: "Clientes", icon: Users },
-  { href: "/perfumeria", label: "Perfumería", icon: Droplets },
-  { href: "/sublimacion", label: "Sublimación", icon: Printer },
+  { href: "/inventario", label: "Inventario", icon: Archive },
   { href: "/reportes", label: "Reportes", icon: FileText },
   { href: "/gastos", label: "Gastos", icon: Wallet },
   { href: "/combos", label: "Combos", icon: Package },

@@ -7,6 +7,7 @@ import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
+import Inventario from "@/pages/inventario";
 import Perfumeria from "@/pages/perfumeria";
 import Sublimacion from "@/pages/sublimacion";
 import Clientes from "@/pages/clientes";
@@ -31,6 +32,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/inventario" component={Inventario} />
         <Route path="/perfumeria" component={Perfumeria} />
         <Route path="/sublimacion" component={Sublimacion} />
         <Route path="/clientes" component={Clientes} />
