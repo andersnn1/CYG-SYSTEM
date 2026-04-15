@@ -89,7 +89,12 @@ const STATUS_CONFIG = {
 } as const;
 
 function StatusBadge({ status }: { status: Quote["status"] }) {
-  const { label, classes, dot } = STATUS_CONFIG[status];
+  const config = STATUS_CONFIG[status] ?? {
+    label: status ?? "—",
+    classes: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300",
+    dot: "bg-gray-400",
+  };
+  const { label, classes, dot } = config;
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${classes}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
