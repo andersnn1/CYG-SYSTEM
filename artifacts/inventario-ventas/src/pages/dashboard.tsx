@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pencil, FileText, ExternalLink } from "lucide-react";
+import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pencil, FileText, ExternalLink, X, ShoppingCart } from "lucide-react";
+import { startOfDay, isSameDay, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +46,25 @@ interface RecentQuote {
   createdAt: string;
 }
 
+interface ScheduledQuote {
+  id: number;
+  quoteNumber: string;
+  clientName: string;
+  total: number;
+  status: string;
+  scheduledPurchaseDate: string;
+}
+
+const SCHEDULED_DAY_CLASS = [
+  "[&>button]:ring-2",
+  "[&>button]:ring-yellow-400",
+  "[&>button]:ring-offset-1",
+  "[&>button]:bg-yellow-50",
+  "[&>button]:text-yellow-800",
+  "[&>button]:font-bold",
+  "[&>button]:cursor-pointer",
+].join(" ");
+
 export default function Dashboard() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -59,6 +79,23 @@ export default function Dashboard() {
   const [savingGoal, setSavingGoal] = useState(false);
   const [recentQuotes, setRecentQuotes] = useState<RecentQuote[]>([]);
   const [loadingQuotes, setLoadingQuotes] = useState(true);
+  const [scheduledQuotes, setScheduledQuotes] = useState<ScheduledQuote[]>([]);
+  const [popupDay, setPopupDay] = useState<Date | null>(null);
+
+  const popupQuotes = popupDay
+    ? scheduledQuotes.filter(q =>
+        q.scheduledPurchaseDate &&
+        isSameDay(parseISO(q.scheduledPurchaseDate), popupDay)
+      )
+    : [];
+
+  const scheduledDates = scheduledQuotes
+    .filter(q => q.scheduledPurchaseDate)
+    .map(q => startOfDay(parseISO(q.scheduledPurchaseDate)));
+
+  const handleDayClick = (day: Date, mods: Record<string, boolean>) => {
+    if (mods.scheduled) setPopupDay(day);
+  };
 
   useEffect(() => {
     apiFetch("/quotes")
@@ -70,6 +107,10 @@ export default function Dashboard() {
       })
       .catch(() => {})
       .finally(() => setLoadingQuotes(false));
+
+    apiFetch("/dashboard/scheduled-quotes")
+      .then((data: ScheduledQuote[]) => setScheduledQuotes(data))
+      .catch(() => {});
   }, []);
 
   const now = new Date();
@@ -399,21 +440,30 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Calendar + Recent Cotizaciones */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Calendar + Recent Cotizaciones — equal-height side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
         {/* Calendar */}
-        <div className="lg:col-span-1 flex flex-col gap-4">
+        <div className="flex flex-col">
           <DatePickerCalendar
-            title="Calendario"
+            title={scheduledDates.length > 0 ? `Calendario · ${scheduledDates.length} cita${scheduledDates.length > 1 ? "s" : ""} programada${scheduledDates.length > 1 ? "s" : ""}` : "Calendario"}
             placeholder="Hoy"
             disablePast={false}
             defaultToToday
+            modifiers={{ scheduled: scheduledDates }}
+            modifierClassNames={{ scheduled: SCHEDULED_DAY_CLASS }}
+            onDayClick={handleDayClick}
           />
+          {scheduledDates.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              💛 Los días con borde amarillo tienen cotizaciones programadas — haz clic para verlas
+            </p>
+          )}
         </div>
 
         {/* Recent Cotizaciones */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
+        <Card className="flex flex-col">
+          <CardHeader className="flex-shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-blue-500" /> Cotizaciones Recientes
@@ -428,10 +478,10 @@ export default function Dashboard() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-y-auto">
             {loadingQuotes ? (
               <div className="space-y-3">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
               </div>
             ) : recentQuotes.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground text-sm">
@@ -467,6 +517,63 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Scheduled-day popup */}
+      {popupDay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPopupDay(null)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b dark:border-slate-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <p className="font-bold text-sm text-yellow-900 dark:text-yellow-200">Compras programadas</p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                    {popupDay.toLocaleDateString("es-HN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPopupDay(null)}
+                className="rounded-full p-1 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
+              >
+                <X className="h-4 w-4 text-yellow-700 dark:text-yellow-300" />
+              </button>
+            </div>
+
+            {/* Quote list */}
+            <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
+              {popupQuotes.map(q => {
+                const cfg = STATUS_LABEL[q.status] ?? { label: q.status, classes: "bg-gray-100 text-gray-600 border-gray-200" };
+                return (
+                  <div key={q.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{q.quoteNumber}</p>
+                      <p className="text-xs text-muted-foreground truncate">{q.clientName}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.classes}`}>{cfg.label}</span>
+                      <p className="font-bold text-sm">{formatCurrency(q.total)}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2"
+                        onClick={() => { setPopupDay(null); navigate("/cotizaciones"); }}
+                      >
+                        Ver
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Goal Dialog */}
       <Dialog open={goalDialogOpen} onOpenChange={setGoalDialogOpen}>

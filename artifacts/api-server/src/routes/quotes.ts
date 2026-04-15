@@ -14,6 +14,7 @@ function mapQuote(quote: typeof quotesTable.$inferSelect, items?: typeof quoteIt
     total: Number(quote.total),
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
+    scheduledPurchaseDate: quote.scheduledPurchaseDate ?? null,
     items: items?.map(item => ({
       ...item,
       unitPrice: Number(item.unitPrice),
@@ -57,6 +58,7 @@ const CreateQuoteBody = z.object({
   paymentMethod: z.string().optional(),
   issueDate: z.string().min(1),
   validUntil: z.string().optional(),
+  scheduledPurchaseDate: z.string().optional(),
   items: z.array(QuoteItemBody).min(1),
 });
 
@@ -75,6 +77,7 @@ const UpdateQuoteBody = z.object({
   paymentMethod: z.string().optional(),
   issueDate: z.string().optional(),
   validUntil: z.string().optional().nullable(),
+  scheduledPurchaseDate: z.string().optional().nullable(),
   items: z.array(QuoteItemBody).optional(),
 });
 
@@ -147,6 +150,7 @@ router.post("/quotes", async (req, res): Promise<void> => {
     paymentMethod: quoteData.paymentMethod ?? "efectivo",
     issueDate: quoteData.issueDate,
     validUntil: quoteData.validUntil ?? null,
+    scheduledPurchaseDate: quoteData.scheduledPurchaseDate ?? null,
     invoiceId: null,
   }).returning();
 
@@ -217,6 +221,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
     ...(updateData.paymentMethod && { paymentMethod: updateData.paymentMethod }),
     ...(updateData.issueDate && { issueDate: updateData.issueDate }),
     ...(updateData.validUntil !== undefined && { validUntil: updateData.validUntil ?? null }),
+    ...(updateData.scheduledPurchaseDate !== undefined && { scheduledPurchaseDate: updateData.scheduledPurchaseDate ?? null }),
   }).where(eq(quotesTable.id, id)).returning();
 
   const updatedItems = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, id));

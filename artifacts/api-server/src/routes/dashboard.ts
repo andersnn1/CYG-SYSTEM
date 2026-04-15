@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { sql, and, eq } from "drizzle-orm";
-import { db, salesTable, perfumeryTable, sublimationTable, clientsTable, expensesTable, invoicesTable, monthlyGoalsTable } from "@workspace/db";
+import { sql, and, eq, isNotNull } from "drizzle-orm";
+import { db, salesTable, perfumeryTable, sublimationTable, clientsTable, expensesTable, invoicesTable, monthlyGoalsTable, quotesTable } from "@workspace/db";
 import { GetSalesChartQueryParams } from "@workspace/api-zod";
 import { z } from "zod";
 
@@ -206,6 +206,28 @@ router.post("/dashboard/monthly-goal", async (req, res): Promise<void> => {
     targetAmount: Number(goal.targetAmount),
     createdAt: goal.createdAt.toISOString(),
   });
+});
+
+// GET /dashboard/scheduled-quotes — quotes with a scheduledPurchaseDate set
+router.get("/dashboard/scheduled-quotes", async (req, res): Promise<void> => {
+  const quotes = await db
+    .select({
+      id: quotesTable.id,
+      quoteNumber: quotesTable.quoteNumber,
+      clientName: quotesTable.clientName,
+      total: quotesTable.total,
+      status: quotesTable.status,
+      scheduledPurchaseDate: quotesTable.scheduledPurchaseDate,
+    })
+    .from(quotesTable)
+    .where(isNotNull(quotesTable.scheduledPurchaseDate));
+
+  res.json(
+    quotes.map(q => ({
+      ...q,
+      total: Number(q.total),
+    }))
+  );
 });
 
 export default router;

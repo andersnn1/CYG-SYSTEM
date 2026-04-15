@@ -48,6 +48,7 @@ interface Quote {
   notes?: string | null;
   issueDate: string;
   validUntil?: string | null;
+  scheduledPurchaseDate?: string | null;
   invoiceId?: number | null;
   items?: QuoteItem[];
   createdAt: string;
@@ -521,6 +522,7 @@ type QuoteForm = {
   notes: string;
   issueDate: string;
   validUntil: string;
+  scheduledPurchaseDate: string;
   paymentMethod: "efectivo" | "tarjeta" | "transferencia" | "cheque";
   items: ItemForm[];
 };
@@ -530,6 +532,7 @@ const defaultForm = (): QuoteForm => ({
   clientId: "", clientName: "", clientPhone: "", clientEmail: "",
   clientAddress: "", clientCity: "", clientDepartment: "", clientRtn: "",
   discount: 0, tax: 0, notes: "", issueDate: today, validUntil: "",
+  scheduledPurchaseDate: "",
   paymentMethod: "efectivo",
   items: [{ description: "", quantity: 1, unitPrice: 0 }],
 });
@@ -691,8 +694,9 @@ export default function Cotizaciones() {
         discount:         full.discount,
         tax:              full.tax,
         notes:            full.notes ?? "",
-        issueDate:        full.issueDate,
-        validUntil:       full.validUntil ?? "",
+        issueDate:              full.issueDate,
+        validUntil:             full.validUntil ?? "",
+        scheduledPurchaseDate:  full.scheduledPurchaseDate ?? "",
         items:            full.items?.map(it => ({
           description: it.description,
           quantity:    it.quantity,
@@ -818,8 +822,9 @@ export default function Cotizaciones() {
         discount:         form.discount,
         tax:              form.tax,
         notes:            form.notes             || undefined,
-        issueDate:        form.issueDate,
-        validUntil:       form.validUntil        || undefined,
+        issueDate:              form.issueDate,
+        validUntil:             form.validUntil              || undefined,
+        scheduledPurchaseDate:  form.scheduledPurchaseDate   || undefined,
         items: form.items.map(it => ({
           description: it.description,
           quantity:    it.quantity,
@@ -1515,6 +1520,19 @@ export default function Cotizaciones() {
                 value={form.validUntil}
                 onChange={e => setForm(f => ({ ...f, validUntil: e.target.value }))}
               />
+            </div>
+            <div>
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-yellow-400"></span>
+                Fecha programada de compra
+              </Label>
+              <Input
+                type="date"
+                className="mt-1 bg-background border-yellow-300 focus-visible:ring-yellow-400"
+                value={form.scheduledPurchaseDate}
+                onChange={e => setForm(f => ({ ...f, scheduledPurchaseDate: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Aparece resaltada en el calendario del dashboard</p>
             </div>
           </section>
 

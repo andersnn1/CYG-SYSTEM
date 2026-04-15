@@ -22,6 +22,7 @@ export const quotesTable = pgTable("quotes", {
   paymentMethod: text("payment_method").notNull().default("efectivo"),
   issueDate: date("issue_date").notNull(),
   validUntil: date("valid_until"),
+  scheduledPurchaseDate: date("scheduled_purchase_date"),
   invoiceId: integer("invoice_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

@@ -7,18 +7,15 @@ import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DatePickerCalendarProps {
-  /** Callback fired when the user picks a date */
   onDateSelect?: (date: Date | undefined) => void;
-  /** Pre-selected date (controlled usage) */
   value?: Date;
-  /** Placeholder shown in the label when nothing is selected */
   placeholder?: string;
-  /** If true, past dates are disabled (default: true) */
   disablePast?: boolean;
-  /** Header strip title (default: "Fecha de vencimiento") */
   title?: string;
-  /** If true, initialize the selected date to today */
   defaultToToday?: boolean;
+  modifiers?: Record<string, Date[]>;
+  modifierClassNames?: Record<string, string>;
+  onDayClick?: (day: Date, modifiers: Record<string, boolean>) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -91,6 +88,9 @@ export function DatePickerCalendar({
   disablePast = true,
   title = "Fecha de vencimiento",
   defaultToToday = false,
+  modifiers,
+  modifierClassNames,
+  onDayClick,
 }: DatePickerCalendarProps) {
   const today = startOfDay(new Date());
   const [selected, setSelected] = useState<Date | undefined>(value ?? (defaultToToday ? today : undefined));
@@ -105,7 +105,7 @@ export function DatePickerCalendar({
     : null;
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 overflow-hidden w-full max-w-sm">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 overflow-hidden w-full h-full flex flex-col">
 
       {/* ── Header strip ── */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-5 py-4">
@@ -121,7 +121,7 @@ export function DatePickerCalendar({
       </div>
 
       {/* ── Calendar ── */}
-      <div className="px-3 py-2">
+      <div className="px-3 py-2 flex-1">
         <DayPicker
           mode="single"
           selected={selected}
@@ -129,6 +129,9 @@ export function DatePickerCalendar({
           locale={es}
           disabled={disablePast ? { before: today } : undefined}
           classNames={calendarClassNames}
+          modifiers={modifiers}
+          modifierClassNames={modifierClassNames}
+          onDayClick={onDayClick}
           components={{
             Chevron: ({ orientation }: { orientation?: string }) =>
               orientation === "left"
