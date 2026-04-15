@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { DayPicker } from "react-day-picker";
 import { format, startOfDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -16,6 +16,7 @@ interface DatePickerCalendarProps {
   modifiers?: Record<string, Date[]>;
   modifierClassNames?: Record<string, string>;
   modifiersStyles?: Record<string, React.CSSProperties>;
+  customButtonStyles?: Record<string, React.CSSProperties>;
   onDayClick?: (day: Date, modifiers: Record<string, boolean>) => void;
 }
 
@@ -92,6 +93,7 @@ export function DatePickerCalendar({
   modifiers,
   modifierClassNames,
   modifiersStyles,
+  customButtonStyles,
   onDayClick,
 }: DatePickerCalendarProps) {
   const today = startOfDay(new Date());
@@ -101,6 +103,23 @@ export function DatePickerCalendar({
     setSelected(date);
     onDateSelect?.(date);
   };
+
+  const CustomDayButton = useMemo(() => {
+    if (!customButtonStyles) return undefined;
+    const styleMap = customButtonStyles;
+    return function StyledDayButton({
+      modifiers: mods,
+      className,
+      style,
+      ...rest
+    }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      modifiers?: Record<string, boolean>;
+      day?: unknown;
+    }) {
+      const override = Object.entries(styleMap).find(([key]) => mods?.[key])?.[1];
+      return <button className={className} style={override ? { ...style, ...override } : style} {...rest} />;
+    };
+  }, [customButtonStyles]);
 
   const formattedDate = selected
     ? capitalize(format(selected, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }))
@@ -140,6 +159,7 @@ export function DatePickerCalendar({
               orientation === "left"
                 ? <ChevronLeft className="h-4 w-4" />
                 : <ChevronRight className="h-4 w-4" />,
+            ...(CustomDayButton ? { DayButton: CustomDayButton as any } : {}),
           }}
         />
       </div>

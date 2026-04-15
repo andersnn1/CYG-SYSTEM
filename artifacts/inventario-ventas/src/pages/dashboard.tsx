@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useGetDashboardSummary, useGetSalesChart, useGetTopProducts } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,28 @@ interface ScheduledQuote {
   scheduledPurchaseDate: string;
 }
 
-const SCHEDULED_DAY_CLASS = "ring-2 ring-inset ring-yellow-400 bg-yellow-50 rounded-xl font-bold text-yellow-800";
+
+const CALENDAR_BUTTON_STYLES: Record<string, React.CSSProperties> = {
+  scheduledToday: {
+    backgroundColor: "#dc2626",
+    color: "white",
+    outline: "2.5px solid #991b1b",
+    outlineOffset: "1px",
+    borderRadius: "0.75rem",
+    fontWeight: "700",
+    cursor: "pointer",
+    boxShadow: "0 0 0 3px rgba(220,38,38,0.25)",
+  },
+  scheduledFuture: {
+    backgroundColor: "transparent",
+    color: "#b45309",
+    outline: "2.5px solid #d97706",
+    outlineOffset: "1px",
+    borderRadius: "0.75rem",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+};
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -74,6 +95,8 @@ export default function Dashboard() {
   const [scheduledQuotes, setScheduledQuotes] = useState<ScheduledQuote[]>([]);
   const [popupDay, setPopupDay] = useState<Date | null>(null);
 
+  const todayStart = startOfDay(new Date());
+
   const popupQuotes = popupDay
     ? scheduledQuotes.filter(q =>
         q.scheduledPurchaseDate &&
@@ -81,13 +104,24 @@ export default function Dashboard() {
       )
     : [];
 
-  const scheduledDates = scheduledQuotes
-    .filter(q => q.scheduledPurchaseDate)
+  const scheduledTodayDates = scheduledQuotes
+    .filter(q => q.scheduledPurchaseDate && isSameDay(parseISO(q.scheduledPurchaseDate), todayStart))
     .map(q => startOfDay(parseISO(q.scheduledPurchaseDate)));
 
+  const scheduledFutureDates = scheduledQuotes
+    .filter(q => q.scheduledPurchaseDate && !isSameDay(parseISO(q.scheduledPurchaseDate), todayStart))
+    .map(q => startOfDay(parseISO(q.scheduledPurchaseDate)));
+
+  const scheduledDates = [...scheduledTodayDates, ...scheduledFutureDates];
+
   const handleDayClick = (day: Date, mods: Record<string, boolean>) => {
-    if (mods.scheduled) setPopupDay(day);
+    if (mods.scheduledToday || mods.scheduledFuture) setPopupDay(day);
   };
+
+  const popupIsToday = popupDay ? isSameDay(popupDay, todayStart) : false;
+  const popupHdr = popupIsToday
+    ? { bg: "bg-red-50 dark:bg-red-900/20", icon: "text-red-600", title: "text-red-900 dark:text-red-200", sub: "text-red-700 dark:text-red-400", btn: "hover:bg-red-100 dark:hover:bg-red-800", close: "text-red-700 dark:text-red-300", label: "🔴 Compra URGENTE — HOY" }
+    : { bg: "bg-amber-50 dark:bg-amber-900/20", icon: "text-amber-600", title: "text-amber-900 dark:text-amber-200", sub: "text-amber-700 dark:text-amber-400", btn: "hover:bg-amber-100 dark:hover:bg-amber-800", close: "text-amber-700 dark:text-amber-300", label: "Compras programadas" };
 
   useEffect(() => {
     apiFetch("/quotes")
@@ -438,27 +472,28 @@ export default function Dashboard() {
         {/* Calendar */}
         <div className="flex flex-col">
           <DatePickerCalendar
-            title={scheduledDates.length > 0 ? `Calendario · ${scheduledDates.length} cita${scheduledDates.length > 1 ? "s" : ""} programada${scheduledDates.length > 1 ? "s" : ""}` : "Calendario"}
+            title={
+              scheduledTodayDates.length > 0
+                ? `🔴 ${scheduledTodayDates.length} compra${scheduledTodayDates.length > 1 ? "s" : ""} HOY`
+                : scheduledDates.length > 0
+                ? `Calendario · ${scheduledDates.length} cita${scheduledDates.length > 1 ? "s" : ""} programada${scheduledDates.length > 1 ? "s" : ""}`
+                : "Calendario"
+            }
             placeholder="Hoy"
             disablePast={false}
             defaultToToday
-            modifiers={{ scheduled: scheduledDates }}
-            modifierClassNames={{ scheduled: SCHEDULED_DAY_CLASS }}
-            modifiersStyles={{
-              scheduled: {
-                boxShadow: "inset 0 0 0 2.5px #facc15",
-                backgroundColor: "#fef9c3",
-                borderRadius: "0.75rem",
-                fontWeight: "700",
-                color: "#92400e",
-                cursor: "pointer",
-              },
+            modifiers={{
+              scheduledToday: scheduledTodayDates,
+              scheduledFuture: scheduledFutureDates,
             }}
+            customButtonStyles={CALENDAR_BUTTON_STYLES}
             onDayClick={handleDayClick}
           />
           {scheduledDates.length > 0 && (
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              💛 Los días con borde amarillo tienen cotizaciones programadas — haz clic para verlas
+              {scheduledTodayDates.length > 0
+                ? "🔴 Rojo = compra HOY · 🟠 Ámbar = compra futura — haz clic para ver detalles"
+                : "🟠 Los días en ámbar tienen compras programadas — haz clic para ver detalles"}
             </p>
           )}
         </div>
@@ -529,21 +564,21 @@ export default function Dashboard() {
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b dark:border-slate-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-t-2xl">
+            <div className={`flex items-center justify-between px-6 py-4 border-b dark:border-slate-700 ${popupHdr.bg} rounded-t-2xl`}>
               <div className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-yellow-600" />
+                <ShoppingCart className={`h-5 w-5 ${popupHdr.icon}`} />
                 <div>
-                  <p className="font-bold text-sm text-yellow-900 dark:text-yellow-200">Compras programadas</p>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                  <p className={`font-bold text-sm ${popupHdr.title}`}>{popupHdr.label}</p>
+                  <p className={`text-xs ${popupHdr.sub}`}>
                     {popupDay.toLocaleDateString("es-HN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setPopupDay(null)}
-                className="rounded-full p-1 hover:bg-yellow-100 dark:hover:bg-yellow-800 transition-colors"
+                className={`rounded-full p-1 ${popupHdr.btn} transition-colors`}
               >
-                <X className="h-4 w-4 text-yellow-700 dark:text-yellow-300" />
+                <X className={`h-4 w-4 ${popupHdr.close}`} />
               </button>
             </div>
 
