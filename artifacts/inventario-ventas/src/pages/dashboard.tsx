@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGetDashboardSummary, useGetSalesChart, useGetTopProducts } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pencil } from "lucide-react";
+import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pencil, FileText, ExternalLink } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { DatePickerCalendar } from "@/components/date-picker-calendar";
+import { useLocation } from "wouter";
 
 const API_BASE = "/api";
 async function apiFetch(path: string, options?: RequestInit) {
@@ -25,8 +27,27 @@ async function apiFetch(path: string, options?: RequestInit) {
   return res.json();
 }
 
+const STATUS_LABEL: Record<string, { label: string; classes: string }> = {
+  borrador:   { label: "Borrador",   classes: "bg-gray-100 text-gray-600 border-gray-200" },
+  enviada:    { label: "Enviada",    classes: "bg-blue-50 text-blue-700 border-blue-200" },
+  aceptada:   { label: "Aceptada",   classes: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  rechazada:  { label: "Rechazada",  classes: "bg-red-50 text-red-700 border-red-200" },
+  convertida: { label: "Convertida", classes: "bg-purple-50 text-purple-700 border-purple-200" },
+  pendiente:  { label: "Pendiente",  classes: "bg-amber-50 text-amber-700 border-amber-200" },
+};
+
+interface RecentQuote {
+  id: number;
+  quoteNumber: string;
+  status: string;
+  total: string | number;
+  clientName?: string;
+  createdAt: string;
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: chartData, isLoading: isLoadingChart } = useGetSalesChart();
@@ -36,6 +57,20 @@ export default function Dashboard() {
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalInput, setGoalInput] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
+  const [recentQuotes, setRecentQuotes] = useState<RecentQuote[]>([]);
+  const [loadingQuotes, setLoadingQuotes] = useState(true);
+
+  useEffect(() => {
+    apiFetch("/quotes")
+      .then((data: any[]) => {
+        const sorted = [...data].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setRecentQuotes(sorted.slice(0, 5));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingQuotes(false));
+  }, []);
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -359,6 +394,75 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">No hay ventas registradas</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Calendar + Recent Cotizaciones */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Calendar */}
+        <div className="lg:col-span-1 flex flex-col gap-4">
+          <DatePickerCalendar
+            title="Calendario"
+            placeholder="Hoy"
+            disablePast={false}
+            defaultToToday
+          />
+        </div>
+
+        {/* Recent Cotizaciones */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-500" /> Cotizaciones Recientes
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground gap-1"
+                onClick={() => navigate("/cotizaciones")}
+              >
+                Ver todas <ExternalLink className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingQuotes ? (
+              <div className="space-y-3">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+              </div>
+            ) : recentQuotes.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground text-sm">
+                No hay cotizaciones registradas
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {recentQuotes.map((q) => {
+                  const cfg = STATUS_LABEL[q.status] ?? { label: q.status, classes: "bg-gray-100 text-gray-600 border-gray-200" };
+                  const date = new Date(q.createdAt).toLocaleDateString("es-HN", { day: "2-digit", month: "short", year: "numeric" });
+                  return (
+                    <div key={q.id} className="flex items-center justify-between py-3 gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm">{q.quoteNumber}</p>
+                          <p className="text-xs text-muted-foreground truncate">{q.clientName ?? "—"} · {date}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className={`hidden sm:inline-flex text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.classes}`}>
+                          {cfg.label}
+                        </span>
+                        <p className="font-bold text-sm">{formatCurrency(Number(q.total))}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

@@ -15,6 +15,10 @@ interface DatePickerCalendarProps {
   placeholder?: string;
   /** If true, past dates are disabled (default: true) */
   disablePast?: boolean;
+  /** Header strip title (default: "Fecha de vencimiento") */
+  title?: string;
+  /** If true, initialize the selected date to today */
+  defaultToToday?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,9 +89,11 @@ export function DatePickerCalendar({
   value,
   placeholder = "Selecciona una fecha",
   disablePast = true,
+  title = "Fecha de vencimiento",
+  defaultToToday = false,
 }: DatePickerCalendarProps) {
-  const [selected, setSelected] = useState<Date | undefined>(value);
   const today = startOfDay(new Date());
+  const [selected, setSelected] = useState<Date | undefined>(value ?? (defaultToToday ? today : undefined));
 
   const handleSelect = (date: Date | undefined) => {
     setSelected(date);
@@ -104,7 +110,7 @@ export function DatePickerCalendar({
       {/* ── Header strip ── */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-5 py-4">
         <p className="text-blue-100 text-xs font-semibold uppercase tracking-widest mb-1">
-          Fecha de vencimiento
+          {title}
         </p>
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-white/80 flex-shrink-0" />
