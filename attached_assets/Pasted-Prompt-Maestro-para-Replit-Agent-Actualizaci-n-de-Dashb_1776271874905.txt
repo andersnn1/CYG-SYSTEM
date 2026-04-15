@@ -1,0 +1,36 @@
+Prompt Maestro para Replit Agent (Actualización de Dashboard y UI)
+"Actúa como un Senior Fullstack Developer y Experto en UI/UX. Necesito aplicar una serie de mejoras estructurales y visuales al Dashboard y la navegación de mi sistema 'C&G Electronics'. El stack es React, TypeScript, Tailwind CSS, Lucide React y Drizzle ORM.
+
+Implementa los siguientes requerimientos paso a paso:
+
+1. Reorganización del Layout del Dashboard:
+
+Mueve los componentes de 'Calendario' y 'Cotizaciones Recientes' hacia arriba en la jerarquía visual de la página. Deben quedar posicionados inmediatamente debajo del apartado de 'Distribución de Fondos' (Profit First).
+
+2. Modificación de la Barra de Navegación (Sidebar/Navbar):
+
+Reubica la pestaña/enlace de 'Cotizaciones' en el menú de navegación principal. Debe estar agrupada junto a las pestañas de 'Dashboard', 'Facturas' y 'Ventas' para un acceso más rápido y jerárquico.
+
+3. Mejoras en la Lista/Tabla de 'Cotizaciones Recientes':
+
+Nuevos Datos: Añade columnas o secciones en la vista de lista para mostrar la 'Fecha Programada' (scheduled_purchase_date) y el 'Número de Teléfono' del cliente (si existe en la base de datos).
+
+Acción de Visualización: Agrega un botón de acción en cada fila de la cotización usando el icono de un ojo (Eye de lucide-react). Al hacer clic, debe abrir la vista individual de esa cotización (ya sea redirigiendo a su ruta o abriendo un modal de detalles).
+
+4. Lógica de Urgencia Visual (Highlighting):
+
+Compara la scheduled_purchase_date de cada cotización con la fecha de hoy (new Date()).
+
+Si la fecha programada es HOY: >   - Aplica un estilo de resaltado a la fila o tarjeta de esa cotización específica con un fondo rojo tenue y elegante (ej. bg-red-50 border-red-100).
+
+Cambia el icono de documento de esa cotización a un color rojo atractivo que mantenga la estética del sistema (ej. text-red-500).
+
+5. Sistema de Alertas Dinámicas en el Dashboard:
+
+Crea un componente de Alerta/Banner en la parte superior del Dashboard (justo debajo del título principal).
+
+Este banner solo debe ser visible si existen cotizaciones programadas para el día de HOY.
+
+El diseño debe incluir un icono de campana o alerta (AlertCircle o Bell de lucide-react), un fondo llamativo (ej. bg-red-100 border-l-4 border-red-500) y un texto que indique: '¡Atención! Tienes cotizaciones programadas para cierre el día de hoy. Revisa el calendario y contacta a tus clientes.'
+
+Escribe el código modular, asegurando tipados correctos en TypeScript y un diseño responsive."

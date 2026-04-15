@@ -21,18 +21,18 @@ import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: ClipboardList },
+  { href: "/ventas", label: "Ventas", icon: ShoppingCart },
+  { href: "/facturas", label: "Facturas", icon: Receipt },
+  { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/perfumeria", label: "Perfumería", icon: Droplets },
   { href: "/sublimacion", label: "Sublimación", icon: Printer },
-  { href: "/clientes", label: "Clientes", icon: Users },
-  { href: "/ventas", label: "Ventas", icon: ShoppingCart },
   { href: "/reportes", label: "Reportes", icon: FileText },
-  { href: "/facturas", label: "Facturas", icon: Receipt },
-  { href: "/cotizaciones", label: "Cotizaciones", icon: ClipboardList },
   { href: "/gastos", label: "Gastos", icon: Wallet },
   { href: "/combos", label: "Combos", icon: Package },
 ];
 
-const BOTTOM_PRIMARY_HREFS = ["/", "/perfumeria", "/ventas", "/facturas", "/clientes"];
+const BOTTOM_PRIMARY_HREFS = ["/", "/cotizaciones", "/ventas", "/facturas", "/clientes"];
 const primaryNav = NAV_ITEMS.filter(i => BOTTOM_PRIMARY_HREFS.includes(i.href));
 const moreNav = NAV_ITEMS.filter(i => !BOTTOM_PRIMARY_HREFS.includes(i.href));
 

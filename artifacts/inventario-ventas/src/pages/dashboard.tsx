@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pencil, FileText, ExternalLink, X, ShoppingCart } from "lucide-react";
+import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pencil, FileText, ExternalLink, X, ShoppingCart, Bell, Eye, Phone } from "lucide-react";
 import { startOfDay, isSameDay, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -43,7 +43,9 @@ interface RecentQuote {
   status: string;
   total: string | number;
   clientName?: string;
+  clientPhone?: string | null;
   createdAt: string;
+  scheduledPurchaseDate?: string | null;
 }
 
 interface ScheduledQuote {
@@ -220,6 +222,28 @@ export default function Dashboard() {
           <span className="hidden sm:inline">Exportar Respaldo</span>
         </Button>
       </div>
+
+      {/* Alert Banner — only when there are quotes scheduled for TODAY */}
+      {scheduledTodayDates.length > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border-l-4 border-red-500 bg-red-50 dark:bg-red-900/20 dark:border-red-600 px-4 py-3 shadow-sm">
+          <Bell className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5 animate-pulse" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-red-800 dark:text-red-200">
+              ¡Atención! {scheduledTodayDates.length === 1 ? "Tienes 1 cotización programada" : `Tienes ${scheduledTodayDates.length} cotizaciones programadas`} para cierre el día de hoy.
+            </p>
+            <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">
+              Revisa el calendario y contacta a tus clientes antes de que termine el día.
+            </p>
+          </div>
+          <button
+            className="ml-auto flex-shrink-0 text-red-400 hover:text-red-600 transition-colors"
+            onClick={() => navigate("/cotizaciones")}
+            title="Ver cotizaciones"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Top Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -405,6 +429,133 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Calendar + Recent Cotizaciones — equal-height side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
+        {/* Calendar */}
+        <div className="flex flex-col">
+          <DatePickerCalendar
+            title={
+              scheduledTodayDates.length > 0
+                ? `🔴 ${scheduledTodayDates.length} compra${scheduledTodayDates.length > 1 ? "s" : ""} HOY`
+                : scheduledDates.length > 0
+                ? `Calendario · ${scheduledDates.length} cita${scheduledDates.length > 1 ? "s" : ""} programada${scheduledDates.length > 1 ? "s" : ""}`
+                : "Calendario"
+            }
+            placeholder="Hoy"
+            disablePast={false}
+            defaultToToday
+            modifiers={{
+              scheduledToday: scheduledTodayDates,
+              scheduledFuture: scheduledFutureDates,
+            }}
+            customButtonStyles={CALENDAR_BUTTON_STYLES}
+            onDayClick={handleDayClick}
+          />
+          {scheduledDates.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {scheduledTodayDates.length > 0
+                ? "🔴 Rojo = compra HOY · 🟠 Ámbar = compra futura — haz clic para ver detalles"
+                : "🟠 Los días en ámbar tienen compras programadas — haz clic para ver detalles"}
+            </p>
+          )}
+        </div>
+
+        {/* Recent Cotizaciones */}
+        <Card className="flex flex-col">
+          <CardHeader className="flex-shrink-0 pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-500" /> Cotizaciones Recientes
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground gap-1"
+                onClick={() => navigate("/cotizaciones")}
+              >
+                Ver todas <ExternalLink className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto pt-0">
+            {loadingQuotes ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : recentQuotes.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground text-sm">
+                No hay cotizaciones registradas
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {recentQuotes.map((q) => {
+                  const cfg = STATUS_LABEL[q.status] ?? { label: q.status, classes: "bg-gray-100 text-gray-600 border-gray-200" };
+                  const date = new Date(q.createdAt).toLocaleDateString("es-HN", { day: "2-digit", month: "short", year: "numeric" });
+                  const isUrgent = q.scheduledPurchaseDate
+                    ? isSameDay(parseISO(q.scheduledPurchaseDate), todayStart)
+                    : false;
+                  const scheduledLabel = q.scheduledPurchaseDate
+                    ? new Date(q.scheduledPurchaseDate + "T12:00:00").toLocaleDateString("es-HN", { day: "2-digit", month: "short", year: "numeric" })
+                    : null;
+                  return (
+                    <div
+                      key={q.id}
+                      className={`flex items-center justify-between py-2.5 px-2 rounded-lg gap-3 transition-colors ${
+                        isUrgent
+                          ? "bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/40"
+                          : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
+                          isUrgent ? "bg-red-100 dark:bg-red-900/40" : "bg-blue-50 dark:bg-blue-900/20"
+                        }`}>
+                          <FileText className={`h-4 w-4 ${isUrgent ? "text-red-500" : "text-blue-500"}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm leading-tight">{q.quoteNumber}</p>
+                          <p className="text-xs text-muted-foreground truncate">{q.clientName ?? "—"} · {date}</p>
+                          {q.clientPhone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Phone className="h-3 w-3 flex-shrink-0" />
+                              <span>{q.clientPhone}</span>
+                            </p>
+                          )}
+                          {scheduledLabel && (
+                            <p className={`text-xs flex items-center gap-1 font-medium mt-0.5 ${
+                              isUrgent ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"
+                            }`}>
+                              {isUrgent ? "🔴" : "🟠"} Compra: {scheduledLabel}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className={`hidden sm:inline-flex text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.classes}`}>
+                          {cfg.label}
+                        </span>
+                        <p className="font-bold text-sm">{formatCurrency(Number(q.total))}</p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground flex-shrink-0"
+                          onClick={() => navigate("/cotizaciones")}
+                          title="Ver cotizaciones"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="col-span-1 lg:col-span-2">
           <CardHeader>
@@ -461,95 +612,6 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">No hay ventas registradas</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Calendar + Recent Cotizaciones — equal-height side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-
-        {/* Calendar */}
-        <div className="flex flex-col">
-          <DatePickerCalendar
-            title={
-              scheduledTodayDates.length > 0
-                ? `🔴 ${scheduledTodayDates.length} compra${scheduledTodayDates.length > 1 ? "s" : ""} HOY`
-                : scheduledDates.length > 0
-                ? `Calendario · ${scheduledDates.length} cita${scheduledDates.length > 1 ? "s" : ""} programada${scheduledDates.length > 1 ? "s" : ""}`
-                : "Calendario"
-            }
-            placeholder="Hoy"
-            disablePast={false}
-            defaultToToday
-            modifiers={{
-              scheduledToday: scheduledTodayDates,
-              scheduledFuture: scheduledFutureDates,
-            }}
-            customButtonStyles={CALENDAR_BUTTON_STYLES}
-            onDayClick={handleDayClick}
-          />
-          {scheduledDates.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              {scheduledTodayDates.length > 0
-                ? "🔴 Rojo = compra HOY · 🟠 Ámbar = compra futura — haz clic para ver detalles"
-                : "🟠 Los días en ámbar tienen compras programadas — haz clic para ver detalles"}
-            </p>
-          )}
-        </div>
-
-        {/* Recent Cotizaciones */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-blue-500" /> Cotizaciones Recientes
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted-foreground gap-1"
-                onClick={() => navigate("/cotizaciones")}
-              >
-                Ver todas <ExternalLink className="h-3 w-3" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto">
-            {loadingQuotes ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
-              </div>
-            ) : recentQuotes.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">
-                No hay cotizaciones registradas
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {recentQuotes.map((q) => {
-                  const cfg = STATUS_LABEL[q.status] ?? { label: q.status, classes: "bg-gray-100 text-gray-600 border-gray-200" };
-                  const date = new Date(q.createdAt).toLocaleDateString("es-HN", { day: "2-digit", month: "short", year: "numeric" });
-                  return (
-                    <div key={q.id} className="flex items-center justify-between py-3 gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                          <FileText className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm">{q.quoteNumber}</p>
-                          <p className="text-xs text-muted-foreground truncate">{q.clientName ?? "—"} · {date}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className={`hidden sm:inline-flex text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.classes}`}>
-                          {cfg.label}
-                        </span>
-                        <p className="font-bold text-sm">{formatCurrency(Number(q.total))}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             )}
           </CardContent>
         </Card>
