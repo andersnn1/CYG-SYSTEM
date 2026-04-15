@@ -55,15 +55,7 @@ interface ScheduledQuote {
   scheduledPurchaseDate: string;
 }
 
-const SCHEDULED_DAY_CLASS = [
-  "[&>button]:ring-2",
-  "[&>button]:ring-yellow-400",
-  "[&>button]:ring-offset-1",
-  "[&>button]:bg-yellow-50",
-  "[&>button]:text-yellow-800",
-  "[&>button]:font-bold",
-  "[&>button]:cursor-pointer",
-].join(" ");
+const SCHEDULED_DAY_CLASS = "ring-2 ring-inset ring-yellow-400 bg-yellow-50 rounded-xl font-bold text-yellow-800";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -452,6 +444,16 @@ export default function Dashboard() {
             defaultToToday
             modifiers={{ scheduled: scheduledDates }}
             modifierClassNames={{ scheduled: SCHEDULED_DAY_CLASS }}
+            modifiersStyles={{
+              scheduled: {
+                boxShadow: "inset 0 0 0 2.5px #facc15",
+                backgroundColor: "#fef9c3",
+                borderRadius: "0.75rem",
+                fontWeight: "700",
+                color: "#92400e",
+                cursor: "pointer",
+              },
+            }}
             onDayClick={handleDayClick}
           />
           {scheduledDates.length > 0 && (

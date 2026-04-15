@@ -15,6 +15,7 @@ interface DatePickerCalendarProps {
   defaultToToday?: boolean;
   modifiers?: Record<string, Date[]>;
   modifierClassNames?: Record<string, string>;
+  modifiersStyles?: Record<string, React.CSSProperties>;
   onDayClick?: (day: Date, modifiers: Record<string, boolean>) => void;
 }
 
@@ -90,6 +91,7 @@ export function DatePickerCalendar({
   defaultToToday = false,
   modifiers,
   modifierClassNames,
+  modifiersStyles,
   onDayClick,
 }: DatePickerCalendarProps) {
   const today = startOfDay(new Date());
@@ -131,6 +133,7 @@ export function DatePickerCalendar({
           classNames={calendarClassNames}
           modifiers={modifiers}
           modifierClassNames={modifierClassNames}
+          modifiersStyles={modifiersStyles}
           onDayClick={onDayClick}
           components={{
             Chevron: ({ orientation }: { orientation?: string }) =>
