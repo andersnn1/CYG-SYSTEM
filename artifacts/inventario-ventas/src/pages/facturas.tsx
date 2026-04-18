@@ -918,7 +918,47 @@ export default function Facturas() {
     }
   };
 
-  useState(() => { loadInvoices(); });
+  useEffect(() => {
+    loadInvoices();
+
+    // Revisión previa de cotización
+    const draftStr = localStorage.getItem("facturaDraft");
+    if (draftStr) {
+      try {
+        const draft = JSON.parse(draftStr);
+        setForm({
+          clientId: String(draft.clientId ?? ""),
+          clientName: draft.clientName || "",
+          clientPhone: draft.clientPhone || "",
+          clientEmail: draft.clientEmail || "",
+          clientAddress: draft.clientAddress || "",
+          clientCity: draft.clientCity || "",
+          clientDepartment: draft.clientDepartment || "",
+          clientRtn: draft.clientRtn || "",
+          paymentMethod: "efectivo",
+          transferReference: "",
+          discount: Number(draft.discount || 0),
+          tax: Number(draft.tax || 0),
+          notes: draft.notes || "",
+          issueDate: new Date().toISOString().split("T")[0],
+          dueDate: "",
+          items: draft.items?.map((it: any) => ({
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+          })) ?? [],
+        });
+        setEditingId(null);
+        setShowAddress(!!(draft.clientAddress || draft.clientCity || draft.clientDepartment));
+        setClientSearch(draft.clientName || "");
+        setView("form");
+        localStorage.removeItem("facturaDraft");
+        toast({ title: "Borrador cargado para revisión previa" });
+      } catch (err) {
+        localStorage.removeItem("facturaDraft");
+      }
+    }
+  }, []);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = invoices

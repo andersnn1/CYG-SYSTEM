@@ -13,7 +13,7 @@ export const quotesTable = pgTable("quotes", {
   clientCity: text("client_city"),
   clientDepartment: text("client_department"),
   clientRtn: text("client_rtn"),
-  status: text("status").notNull().default("borrador"), // borrador, enviada, aceptada, rechazada, convertida
+  status: text("status").notNull().default("pendiente"), // pendiente, aceptada, rechazada, convertida
   subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull(),
   discount: numeric("discount", { precision: 10, scale: 2 }).notNull().default("0"),
   tax: numeric("tax", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -23,7 +23,9 @@ export const quotesTable = pgTable("quotes", {
   issueDate: date("issue_date").notNull(),
   validUntil: date("valid_until"),
   scheduledPurchaseDate: date("scheduled_purchase_date"),
+  followUpDate: date("follow_up_date"),
   invoiceId: integer("invoice_id"),
+  followUpCount: integer("follow_up_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

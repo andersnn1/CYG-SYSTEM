@@ -1,3 +1,4 @@
+// MARKER: SCHEDULED_DATE_FIX_V1
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, quotesTable, quoteItemsTable, invoicesTable, invoiceItemsTable, clientsTable } from "@workspace/db";
@@ -15,6 +16,8 @@ function mapQuote(quote: typeof quotesTable.$inferSelect, items?: typeof quoteIt
     createdAt: quote.createdAt.toISOString(),
     updatedAt: quote.updatedAt.toISOString(),
     scheduledPurchaseDate: quote.scheduledPurchaseDate ?? null,
+    followUpDate: quote.followUpDate ?? null,
+    followUpCount: quote.followUpCount,
     items: items?.map(item => ({
       ...item,
       unitPrice: Number(item.unitPrice),
@@ -44,21 +47,21 @@ const QuoteItemBody = z.object({
 });
 
 const CreateQuoteBody = z.object({
-  clientId: z.number().int().optional(),
+  clientId: z.number().int().optional().nullable(),
   clientName: z.string().min(1),
-  clientPhone: z.string().optional(),
-  clientEmail: z.string().optional(),
-  clientAddress: z.string().optional(),
-  clientCity: z.string().optional(),
-  clientDepartment: z.string().optional(),
-  clientRtn: z.string().optional(),
-  discount: z.number().min(0).optional(),
-  tax: z.number().min(0).optional(),
-  notes: z.string().optional(),
-  paymentMethod: z.string().optional(),
+  clientPhone: z.string().optional().nullable(),
+  clientEmail: z.string().optional().nullable(),
+  clientAddress: z.string().optional().nullable(),
+  clientCity: z.string().optional().nullable(),
+  clientDepartment: z.string().optional().nullable(),
+  clientRtn: z.string().optional().nullable(),
+  discount: z.number().min(0).optional().nullable(),
+  tax: z.number().min(0).optional().nullable(),
+  notes: z.string().optional().nullable(),
+  paymentMethod: z.string().optional().nullable(),
   issueDate: z.string().min(1),
-  validUntil: z.string().optional(),
-  scheduledPurchaseDate: z.string().optional(),
+  validUntil: z.string().optional().nullable(),
+  scheduledPurchaseDate: z.string().optional().nullable(),
   items: z.array(QuoteItemBody).min(1),
 });
 
@@ -70,7 +73,8 @@ const UpdateQuoteBody = z.object({
   clientCity: z.string().optional().nullable(),
   clientDepartment: z.string().optional().nullable(),
   clientRtn: z.string().optional().nullable(),
-  status: z.enum(["borrador", "enviada", "aceptada", "rechazada", "convertida"]).optional(),
+  status: z.enum(["pendiente", "aceptada", "rechazada", "convertida"]).optional(),
+  followUpCount: z.number().int().min(0).optional(),
   discount: z.number().min(0).optional(),
   tax: z.number().min(0).optional(),
   notes: z.string().optional().nullable(),
@@ -141,7 +145,7 @@ router.post("/quotes", async (req, res): Promise<void> => {
     clientCity,
     clientDepartment,
     clientRtn: quoteData.clientRtn ?? null,
-    status: "borrador",
+    status: "pendiente",
     subtotal: String(subtotal),
     discount: String(discount),
     tax: String(tax),
@@ -149,8 +153,8 @@ router.post("/quotes", async (req, res): Promise<void> => {
     notes: quoteData.notes ?? null,
     paymentMethod: quoteData.paymentMethod ?? "efectivo",
     issueDate: quoteData.issueDate,
-    validUntil: quoteData.validUntil ?? null,
-    scheduledPurchaseDate: quoteData.scheduledPurchaseDate ?? null,
+    validUntil: (typeof quoteData.validUntil === 'string' && quoteData.validUntil.trim() !== "") ? quoteData.validUntil : null,
+    scheduledPurchaseDate: (typeof quoteData.scheduledPurchaseDate === 'string' && quoteData.scheduledPurchaseDate.trim() !== "") ? quoteData.scheduledPurchaseDate : null,
     invoiceId: null,
   }).returning();
 
@@ -206,6 +210,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
 
   const [updated] = await db.update(quotesTable).set({
     ...(updateData.status && { status: updateData.status }),
+    ...(updateData.followUpCount !== undefined && { followUpCount: updateData.followUpCount }),
     ...(updateData.clientName && { clientName: updateData.clientName }),
     ...(updateData.clientPhone !== undefined && { clientPhone: updateData.clientPhone ?? null }),
     ...(updateData.clientEmail !== undefined && { clientEmail: updateData.clientEmail ?? null }),
@@ -220,8 +225,12 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
     ...(updateData.notes !== undefined && { notes: updateData.notes ?? null }),
     ...(updateData.paymentMethod && { paymentMethod: updateData.paymentMethod }),
     ...(updateData.issueDate && { issueDate: updateData.issueDate }),
-    ...(updateData.validUntil !== undefined && { validUntil: updateData.validUntil ?? null }),
-    ...(updateData.scheduledPurchaseDate !== undefined && { scheduledPurchaseDate: updateData.scheduledPurchaseDate ?? null }),
+    ...(updateData.validUntil !== undefined && { 
+      validUntil: (typeof updateData.validUntil === 'string' && updateData.validUntil.trim() !== "") ? updateData.validUntil : null 
+    }),
+    ...(updateData.scheduledPurchaseDate !== undefined && { 
+      scheduledPurchaseDate: (typeof updateData.scheduledPurchaseDate === 'string' && updateData.scheduledPurchaseDate.trim() !== "") ? updateData.scheduledPurchaseDate : null 
+    }),
   }).where(eq(quotesTable.id, id)).returning();
 
   const updatedItems = await db.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, id));

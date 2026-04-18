@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, departments } from "@/lib/format";
 import {
   Plus, Trash2, ClipboardList, CheckCircle, XCircle, Clock,
-  Search, X, ChevronDown, ChevronUp, ArrowLeft, Send, FileText, Printer, Download,
+  Search, X, ChevronDown, ChevronUp, ArrowLeft, Send, FileText, Printer, Download, MessageCircle, AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -40,7 +40,8 @@ interface Quote {
   clientDepartment?: string | null;
   clientRtn?: string | null;
   paymentMethod?: string | null;
-  status: "borrador" | "enviada" | "aceptada" | "rechazada" | "convertida";
+  status: "pendiente" | "aceptada" | "rechazada" | "convertida";
+  followUpCount?: number;
   subtotal: number;
   discount: number;
   tax: number;
@@ -82,8 +83,7 @@ async function apiFetch(path: string, options?: RequestInit) {
 // ─── Status Config ─────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  borrador:   { label: "Borrador",   classes: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300",       dot: "bg-gray-400"   },
-  enviada:    { label: "Enviada",    classes: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300",     dot: "bg-blue-400"   },
+  pendiente:  { label: "Pendiente",  classes: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300",     dot: "bg-amber-400"   },
   aceptada:   { label: "Aceptada",   classes: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300", dot: "bg-emerald-400" },
   rechazada:  { label: "Rechazada",  classes: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300",         dot: "bg-red-400"    },
   convertida: { label: "Convertida", classes: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300", dot: "bg-purple-400" },
@@ -527,11 +527,16 @@ type QuoteForm = {
   items: ItemForm[];
 };
 
-const today = new Date().toISOString().split("T")[0];
+const todayDate = new Date();
+const today = todayDate.toISOString().split("T")[0];
+const validDate = new Date(todayDate);
+validDate.setDate(validDate.getDate() + 5);
+const defaultValidUntil = validDate.toISOString().split("T")[0];
+
 const defaultForm = (): QuoteForm => ({
   clientId: "", clientName: "", clientPhone: "", clientEmail: "",
   clientAddress: "", clientCity: "", clientDepartment: "", clientRtn: "",
-  discount: 0, tax: 0, notes: "", issueDate: today, validUntil: "",
+  discount: 0, tax: 0, notes: "", issueDate: today, validUntil: defaultValidUntil,
   scheduledPurchaseDate: "",
   paymentMethod: "efectivo",
   items: [{ description: "", quantity: 1, unitPrice: 0 }],
@@ -657,12 +662,19 @@ export default function Cotizaciones() {
       !searchQuery ||
       q.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.quoteNumber.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    )
+    .sort((a, b) => {
+      const nowMs = Date.now();
+      const isA_Urgent = a.status === "pendiente" && (nowMs - new Date(a.createdAt).getTime() > 48 * 3600 * 1000);
+      const isB_Urgent = b.status === "pendiente" && (nowMs - new Date(b.createdAt).getTime() > 48 * 3600 * 1000);
+      if (isA_Urgent && !isB_Urgent) return -1;
+      if (!isA_Urgent && isB_Urgent) return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   const counts = {
     all:        quotes.length,
-    borrador:   quotes.filter(q => q.status === "borrador").length,
-    enviada:    quotes.filter(q => q.status === "enviada").length,
+    pendiente:  quotes.filter(q => q.status === "pendiente").length,
     aceptada:   quotes.filter(q => q.status === "aceptada").length,
     rechazada:  quotes.filter(q => q.status === "rechazada").length,
     convertida: quotes.filter(q => q.status === "convertida").length,
@@ -821,10 +833,10 @@ export default function Cotizaciones() {
         paymentMethod:    form.paymentMethod,
         discount:         form.discount,
         tax:              form.tax,
-        notes:            form.notes             || undefined,
+        notes:            form.notes             || null,
         issueDate:              form.issueDate,
-        validUntil:             form.validUntil              || undefined,
-        scheduledPurchaseDate:  form.scheduledPurchaseDate   || undefined,
+        validUntil:             form.validUntil              || null,
+        scheduledPurchaseDate:  form.scheduledPurchaseDate   || null,
         items: form.items.map(it => ({
           description: it.description,
           quantity:    it.quantity,
@@ -862,6 +874,21 @@ export default function Cotizaciones() {
     }
   };
 
+  const handleWhatsApp = async (q: Quote) => {
+    const msg = `Hola ${q.clientName}, ¿pudiste revisar la cotización que te enviamos de C&G Electronics? Quedo atento.`;
+    let phone = q.clientPhone || "";
+    phone = phone.replace(/\D/g, "");
+    if (phone.length === 8 && (phone.startsWith("9") || phone.startsWith("3"))) phone = "504" + phone;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+
+    const newCount = (q.followUpCount || 0) + 1;
+    try {
+      await apiFetch(`/quotes/${q.id}`, { method: "PATCH", body: JSON.stringify({ followUpCount: newCount }) });
+      loadQuotes();
+    } catch (e) {}
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
@@ -883,6 +910,18 @@ export default function Cotizaciones() {
       toast({ title: "Cotización convertida a factura" });
       setConvertOpen(false);
       setConvertId(null);
+      navigate("/facturas");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleAcceptAndInvoice = async (id: number) => {
+    try {
+      await apiFetch(`/quotes/${id}`, { method: "PATCH", body: JSON.stringify({ status: "aceptada" }) });
+      toast({ title: "Cotización aceptada. Redirigiendo a facturación..." });
+      const q = quotes.find(q => q.id === id);
+      if (q) localStorage.setItem("facturaDraft", JSON.stringify({ ...q, status: "aceptada" }));
       navigate("/facturas");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -929,9 +968,9 @@ export default function Cotizaciones() {
 
           {/* Status filters — scrollable on mobile */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
-            {(["all", "borrador", "enviada", "aceptada", "rechazada", "convertida"] as const).map(s => {
+            {(["all", "pendiente", "aceptada", "rechazada", "convertida"] as const).map(s => {
               const labels: Record<string, string> = {
-                all: "Todas", borrador: "Borrador", enviada: "Enviada",
+                all: "Todas", pendiente: "Pendiente",
                 aceptada: "Aceptada", rechazada: "Rechazada", convertida: "Convertida",
               };
               const count = counts[s];
@@ -1003,7 +1042,14 @@ export default function Cotizaciones() {
                       key={q.id}
                       className={`hover:bg-muted/50 transition-colors border-b last:border-b-0 ${idx % 2 === 0 ? "" : "bg-muted/20"}`}
                     >
-                      <td className="px-4 py-3 font-mono font-semibold text-foreground cursor-pointer" onClick={() => openEdit(q)}>{q.quoteNumber}</td>
+                      <td className="px-4 py-3 font-mono font-semibold text-foreground cursor-pointer" onClick={() => openEdit(q)}>
+                        <div className="flex items-center gap-2">
+                          {q.quoteNumber}
+                          {q.status === "pendiente" && (Date.now() - new Date(q.createdAt).getTime() > 48 * 3600 * 1000) && (
+                            <AlertTriangle className="h-4 w-4 text-red-500" title="Prioridad: +48 hrs pendiente" />
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 font-medium text-foreground max-w-[180px] truncate cursor-pointer" onClick={() => openEdit(q)}>{q.clientName}</td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell cursor-pointer" onClick={() => openEdit(q)}>{q.issueDate}</td>
                       <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell cursor-pointer" onClick={() => openEdit(q)}>
@@ -1017,6 +1063,18 @@ export default function Cotizaciones() {
                       </td>
                       <td className="px-2 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {q.status === "pendiente" && q.clientPhone && (
+                            <button
+                              title="Seguimiento WhatsApp"
+                              onClick={e => { e.stopPropagation(); handleWhatsApp(q); }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 transition-colors relative"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                              {q.followUpCount && q.followUpCount > 0 ? (
+                                <span className="absolute -top-1.5 -right-1.5 bg-green-100 text-green-700 text-[9px] font-bold px-1.5 rounded-full">{q.followUpCount}</span>
+                              ) : null}
+                            </button>
+                          )}
                           <button
                             title="Imprimir Cotización"
                             onClick={e => handlePrintClick(e, q.id)}
@@ -1059,6 +1117,9 @@ export default function Cotizaciones() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono font-bold text-foreground">{q.quoteNumber}</span>
+                          {q.status === "pendiente" && (Date.now() - new Date(q.createdAt).getTime() > 48 * 3600 * 1000) && (
+                            <AlertTriangle className="h-4 w-4 text-red-500" title="Prioridad: +48 hrs pendiente" />
+                          )}
                           <StatusBadge status={q.status} />
                         </div>
                         <p className="font-semibold text-foreground mt-1 truncate">{q.clientName}</p>
@@ -1088,6 +1149,18 @@ export default function Cotizaciones() {
                     >
                       Abrir
                     </button>
+                    {q.status === "pendiente" && q.clientPhone && (
+                      <button
+                        title="Seguimiento WhatsApp"
+                        className="flex-1 flex items-center justify-center py-3 text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors relative"
+                        onClick={e => { e.stopPropagation(); handleWhatsApp(q); }}
+                      >
+                        <MessageCircle className="h-5 w-5" />
+                        {q.followUpCount && q.followUpCount > 0 ? (
+                          <span className="absolute top-2 right-[25%] bg-green-100 text-green-700 text-[10px] font-bold px-1.5 rounded-full">{q.followUpCount}</span>
+                        ) : null}
+                      </button>
+                    )}
                     {/* Download PDF — avoids print dialog on mobile */}
                     <button
                       title="Descargar PDF"
@@ -1172,7 +1245,7 @@ export default function Cotizaciones() {
   }
 
   // ─── FORM VIEW ────────────────────────────────────────────────────────────────
-  const currentStatus = editingQuote?.status ?? "borrador";
+  const currentStatus = editingQuote?.status ?? "pendiente";
 
   return (
     <div className="animate-in fade-in duration-200 space-y-6 pb-16">
@@ -1211,26 +1284,17 @@ export default function Cotizaciones() {
             </Button>
           )}
 
-          {editingId && editingQuote && currentStatus === "borrador" && (
-            <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-              onClick={() => handleStatusChange(editingId, "enviada")}
-            >
-              <Send className="h-4 w-4 mr-1.5" /> Marcar Enviada
-            </Button>
-          )}
-
-          {editingId && editingQuote && currentStatus === "enviada" && (
+          {editingId && editingQuote && currentStatus === "pendiente" && (
             <>
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                onClick={() => handleStatusChange(editingId, "aceptada")}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex-shrink-0"
+                onClick={() => handleAcceptAndInvoice(editingId)}
               >
-                <CheckCircle className="h-4 w-4 mr-1.5" /> Aceptada
+                <CheckCircle className="h-4 w-4 mr-1.5" /> Aceptada (Facturar)
               </Button>
               <Button
                 variant="outline"
-                className="border-red-300 text-red-600 hover:bg-red-50 font-semibold"
+                className="border-red-300 text-red-600 hover:bg-red-50 font-semibold flex-shrink-0"
                 onClick={() => handleStatusChange(editingId, "rechazada")}
               >
                 <XCircle className="h-4 w-4 mr-1.5" /> Rechazada
