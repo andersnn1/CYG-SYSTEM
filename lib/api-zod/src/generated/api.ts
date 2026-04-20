@@ -89,7 +89,6 @@ export const CreatePerfumeryItemBody = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
 });
 
 /**
@@ -108,7 +107,6 @@ export const GetPerfumeryItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -128,7 +126,6 @@ export const UpdatePerfumeryItemBody = zod.object({
   costPrice: zod.number().optional(),
   salePrice: zod.number().optional(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
 });
 
 export const UpdatePerfumeryItemResponse = zod.object({
@@ -140,7 +137,6 @@ export const UpdatePerfumeryItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -164,7 +160,6 @@ export const ListSublimationItemsResponseItem = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -183,7 +178,6 @@ export const CreateSublimationItemBody = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
 });
 
 /**
@@ -202,7 +196,6 @@ export const GetSublimationItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -222,7 +215,6 @@ export const UpdateSublimationItemBody = zod.object({
   costPrice: zod.number().optional(),
   salePrice: zod.number().optional(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
 });
 
 export const UpdateSublimationItemResponse = zod.object({
@@ -234,7 +226,6 @@ export const UpdateSublimationItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
-  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -340,7 +331,7 @@ export const ListSalesResponseItem = zod.object({
   id: zod.number(),
   clientId: zod.number().nullish(),
   clientName: zod.string().nullish(),
-  productType: zod.enum(["perfumeria", "sublimacion"]),
+  productType: zod.enum(["perfumeria", "sublimacion", "combo"]),
   productId: zod.number(),
   productName: zod.string(),
   quantity: zod.number(),
@@ -360,7 +351,7 @@ export const ListSalesResponse = zod.array(ListSalesResponseItem);
  */
 export const CreateSaleBody = zod.object({
   clientId: zod.number().nullish(),
-  productType: zod.enum(["perfumeria", "sublimacion"]),
+  productType: zod.enum(["perfumeria", "sublimacion", "combo"]),
   productId: zod.number(),
   quantity: zod.number(),
   unitPrice: zod.number(),
@@ -380,7 +371,7 @@ export const GetSaleResponse = zod.object({
   id: zod.number(),
   clientId: zod.number().nullish(),
   clientName: zod.string().nullish(),
-  productType: zod.enum(["perfumeria", "sublimacion"]),
+  productType: zod.enum(["perfumeria", "sublimacion", "combo"]),
   productId: zod.number(),
   productName: zod.string(),
   quantity: zod.number(),
@@ -415,7 +406,7 @@ export const UpdateSaleResponse = zod.object({
   id: zod.number(),
   clientId: zod.number().nullish(),
   clientName: zod.string().nullish(),
-  productType: zod.enum(["perfumeria", "sublimacion"]),
+  productType: zod.enum(["perfumeria", "sublimacion", "combo"]),
   productId: zod.number(),
   productName: zod.string(),
   quantity: zod.number(),
@@ -529,7 +520,7 @@ export const GetMonthlyReportResponse = zod.object({
       id: zod.number(),
       clientId: zod.number().nullish(),
       clientName: zod.string().nullish(),
-      productType: zod.enum(["perfumeria", "sublimacion"]),
+      productType: zod.enum(["perfumeria", "sublimacion", "combo"]),
       productId: zod.number(),
       productName: zod.string(),
       quantity: zod.number(),

@@ -927,7 +927,7 @@ components:
           type: ["string", "null"]
         productType:
           type: string
-          enum: [perfumeria, sublimacion]
+          enum: [perfumeria, sublimacion, combo]
         productId:
           type: integer
         productName:
@@ -971,7 +971,7 @@ components:
           type: ["integer", "null"]
         productType:
           type: string
-          enum: [perfumeria, sublimacion]
+          enum: [perfumeria, sublimacion, combo]
         productId:
           type: integer
         quantity:

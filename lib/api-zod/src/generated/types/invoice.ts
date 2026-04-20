@@ -44,7 +44,7 @@ export const CreateInvoiceItemBody = z.object({
   quantity: z.number().int().positive(),
   unitPrice: z.number().positive(),
   productId: z.number().int().positive().optional(),
-  productType: z.enum(["perfumeria", "sublimacion"]).optional(),
+  productType: z.enum(["perfumeria", "sublimacion", "combo"]).optional(),
 });
 
 export const CreateInvoiceBody = z.object({

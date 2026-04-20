@@ -12,4 +12,5 @@ export type CreateSaleBodyProductType =
 export const CreateSaleBodyProductType = {
   perfumeria: "perfumeria",
   sublimacion: "sublimacion",
+  combo: "combo",
 } as const;

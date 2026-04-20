@@ -17,6 +17,4 @@ export interface UpdateSublimationItemBody {
   salePrice?: number;
   /** @nullable */
   description?: string | null;
-  /** @nullable */
-  code?: string | null;
 }

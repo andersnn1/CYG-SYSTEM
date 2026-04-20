@@ -1067,27 +1067,27 @@ export default function Facturas() {
       return;
     }
 
-    // 2. Try combo code match → expand into multiple items
+    // 2. Try combo code match → add as single item
     try {
       const combo = await apiFetch(`/combos/${encodeURIComponent(trimmed.toUpperCase())}`);
       if (combo && Array.isArray(combo.items) && combo.items.length > 0) {
         setForm(f => {
-          const before = f.items.slice(0, itemIndex);
-          const after = f.items.slice(itemIndex + 1);
-          const expanded: ItemForm[] = combo.items.map((ci: any) => ({
-            description: ci.productName,
-            quantity: ci.quantity,
+          const items = [...f.items];
+          items[itemIndex] = {
+            ...items[itemIndex],
+            description: `${combo.code} - ${combo.name}`,
+            quantity: 1,
             unitPrice: combo.fixedPrice != null
-              ? Number(combo.fixedPrice) / combo.items.length  // split fixed price evenly
-              : Number(ci.unitPrice),
-            productId: ci.productId,
-            productType: ci.productType,
-          }));
-          return { ...f, items: [...before, ...expanded, ...after] };
+              ? Number(combo.fixedPrice)
+              : combo.items.reduce((sum: number, ci: any) => sum + Number(ci.unitPrice), 0),
+            productId: combo.id,
+            productType: "combo",
+          };
+          return { ...f, items };
         });
         setItemSearch(s => ({ ...s, [itemIndex]: "" }));
         setCodeError(s => ({ ...s, [itemIndex]: false }));
-        toast({ title: `Combo "${combo.name}" expandido`, description: `${combo.items.length} productos agregados` });
+        toast({ title: `Combo agregado al listado` });
         return;
       }
     } catch { /* not a combo — fall through */ }
@@ -1814,7 +1814,7 @@ export default function Facturas() {
               </div>
               {clientDropOpen && clientSearch.trim().length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto">
-                  {(clients ?? [])
+                  {(Array.isArray(clients) ? clients : [])
                     .filter((c: Client) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
                     .slice(0, 8)
                     .map((c: Client) => (

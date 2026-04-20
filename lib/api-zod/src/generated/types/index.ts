@@ -17,7 +17,6 @@ export * from "./createSublimationItemBody";
 export * from "./createSublimationItemBodyItemType";
 export * from "./dashboardSummary";
 export * from "./expense";
-export * from "./invoice";
 export * from "./getMonthlyGoalParams";
 export * from "./getMonthlyReportParams";
 export * from "./getSalesChartParams";

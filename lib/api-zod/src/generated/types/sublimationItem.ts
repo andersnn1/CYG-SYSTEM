@@ -18,8 +18,6 @@ export interface SublimationItem {
   salePrice: number;
   /** @nullable */
   description?: string | null;
-  /** @nullable */
-  code?: string | null;
   createdAt: string;
   updatedAt: string;
 }

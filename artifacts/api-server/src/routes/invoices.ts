@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql, and } from "drizzle-orm";
-import { db, invoicesTable, invoiceItemsTable, clientsTable, perfumeryTable, sublimationTable, salesTable } from "@workspace/db";
+import { db, invoicesTable, invoiceItemsTable, clientsTable, perfumeryTable, sublimationTable, salesTable, combosTable, comboItemsTable } from "@workspace/db";
 import {
   CreateInvoiceBody,
   UpdateInvoiceBody,
@@ -179,6 +179,37 @@ router.post("/invoices", async (req, res): Promise<void> => {
             .where(eq(sublimationTable.id, item.productId));
         }
       }
+    } else if (item.productType === "combo") {
+      const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+      if (combo) {
+        productName = combo.name;
+        
+        let totalCost = 0;
+        const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+        
+        for (const cItem of comboItems) {
+          if (cItem.productType === "perfumeria") {
+            const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+            if (cProduct) {
+              totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+              await db.update(perfumeryTable)
+                .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                .where(eq(perfumeryTable.id, cItem.productId));
+            }
+          } else if (cItem.productType === "sublimacion") {
+            const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+            if (cProduct) {
+              totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+              if (cProduct.stock !== null) {
+                await db.update(sublimationTable)
+                  .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                  .where(eq(sublimationTable.id, cItem.productId));
+              }
+            }
+          }
+        }
+        costPrice = totalCost;
+      }
     }
 
     if (productName !== null && costPrice !== null) {
@@ -256,6 +287,23 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
       } else if (item.productType === "sublimacion") {
         const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
         if (product) { productName = product.name; costPrice = Number(product.costPrice ?? 0); }
+      } else if (item.productType === "combo") {
+        const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+        if (combo) {
+          productName = combo.name;
+          let totalCost = 0;
+          const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+          for (const cItem of comboItems) {
+            if (cItem.productType === "perfumeria") {
+              const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+              if (cProduct) totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+            } else if (cItem.productType === "sublimacion") {
+              const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+              if (cProduct) totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+            }
+          }
+          costPrice = totalCost;
+        }
       }
 
       if (productName !== null && costPrice !== null) {

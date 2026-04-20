@@ -12,4 +12,5 @@ export type SaleProductType =
 export const SaleProductType = {
   perfumeria: "perfumeria",
   sublimacion: "sublimacion",
+  combo: "combo",
 } as const;

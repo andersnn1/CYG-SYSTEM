@@ -185,6 +185,7 @@ export type SaleProductType =
 export const SaleProductType = {
   perfumeria: "perfumeria",
   sublimacion: "sublimacion",
+  combo: "combo",
 } as const;
 
 export interface Sale {
@@ -214,6 +215,7 @@ export type CreateSaleBodyProductType =
 export const CreateSaleBodyProductType = {
   perfumeria: "perfumeria",
   sublimacion: "sublimacion",
+  combo: "combo",
 } as const;
 
 export interface CreateSaleBody {
