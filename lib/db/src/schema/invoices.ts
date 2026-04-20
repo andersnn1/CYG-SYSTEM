@@ -27,6 +27,13 @@ export const invoicesTable = pgTable("invoices", {
   transportista: text("transportista"),
   fotoGuiaPath: text("foto_guia_path"),
   estadoEntrega: text("estado_entrega").notNull().default("Pendiente"),
+  // ── Cálculo de Utilidad Real (Panel Interno) ─────────────────────────────
+  baseCost: numeric("base_cost", { precision: 10, scale: 2 }),
+  internalExpenses: numeric("internal_expenses", { precision: 10, scale: 2 }).default("0"),
+  internalExpensesNote: text("internal_expenses_note"),
+  taxes: numeric("taxes", { precision: 10, scale: 2 }).default("0"),
+  partnerPayout: numeric("partner_payout", { precision: 10, scale: 2 }),
+  ownerPayout: numeric("owner_payout", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -62,6 +62,7 @@ interface ProductOption {
   id: number;
   label: string;
   price: number;
+  costPrice: number;
   type: "perfumeria" | "sublimacion";
   code?: string | null;
 }
@@ -713,7 +714,8 @@ type ItemForm = {
   quantity: number;
   unitPrice: number;
   productId?: number;
-  productType?: "perfumeria" | "sublimacion";
+  productType?: "perfumeria" | "sublimacion" | "combo";
+  costPrice?: number; // used for real-time profit calc
 };
 
 type InvoiceForm = {
@@ -779,6 +781,13 @@ export default function Facturas() {
 
   // Print
   const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
+
+  // ── Utilidad Real (Panel Interno) ──────────────────────────────────────
+  const [internalExpenses, setInternalExpenses] = useState(0);
+  const [internalExpensesNote, setInternalExpensesNote] = useState("");
+  const [profitTaxes, setProfitTaxes] = useState(0);
+  const [taxMode, setTaxMode] = useState<"manual" | "percent">("manual");
+  const [taxPercent, setTaxPercent] = useState(0);
 
   // WhatsApp
   const [waInvoice, setWaInvoice] = useState<Invoice | null>(null);
@@ -889,6 +898,7 @@ export default function Facturas() {
           id: p.id,
           label: `${p.brand} ${p.name} ${p.ml}ml`,
           price: Number(p.salePrice ?? 0),
+          costPrice: Number(p.costPrice ?? 0),
           type: "perfumeria" as const,
           code: p.code ?? null,
         }));
@@ -896,6 +906,7 @@ export default function Facturas() {
           id: s.id,
           label: s.name,
           price: Number(s.salePrice ?? 0),
+          costPrice: Number(s.costPrice ?? 0),
           type: "sublimacion" as const,
           code: s.code ?? null,
         }));
@@ -942,6 +953,9 @@ export default function Facturas() {
           notes: draft.notes || "",
           issueDate: new Date().toISOString().split("T")[0],
           dueDate: "",
+          numeroGuia: "",
+          transportista: "",
+          estadoEntrega: "Pendiente",
           items: draft.items?.map((it: any) => ({
             description: it.description,
             quantity: it.quantity,
@@ -1047,6 +1061,7 @@ export default function Facturas() {
         unitPrice: product.price,
         productId: product.id,
         productType: product.type,
+        costPrice: product.costPrice,
       };
       return { ...f, items };
     });
@@ -1113,6 +1128,15 @@ export default function Facturas() {
   const subtotal = form.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
   const total = subtotal - form.discount + form.tax;
 
+  // ── Live Profit Calculations ─────────────────────────────────────────
+  const totalRevenue = form.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+  const totalBaseCost = form.items.reduce((s, it) => s + it.quantity * (it.costPrice ?? 0), 0);
+  const grossProfit = totalRevenue - totalBaseCost;
+  const partnerPayout = grossProfit * 0.5;
+  const ownerGross = grossProfit * 0.5;
+  const computedTaxes = taxMode === "percent" ? ownerGross * (taxPercent / 100) : profitTaxes;
+  const ownerRealIncome = ownerGross - internalExpenses - computedTaxes;
+
   const handleSubmit = async () => {
     if (!form.clientName.trim()) {
       toast({ title: "Error", description: "Nombre de cliente requerido", variant: "destructive" });
@@ -1147,6 +1171,13 @@ export default function Facturas() {
           productId: it.productId,
           productType: it.productType,
         })),
+        // ── Utilidad Real ────────────────────────────────────────────────
+        baseCost: totalBaseCost,
+        internalExpenses,
+        internalExpensesNote: internalExpensesNote || undefined,
+        taxes: computedTaxes,
+        partnerPayout,
+        ownerPayout: ownerRealIncome,
       };
 
       if (editingId) {
@@ -2037,6 +2068,119 @@ export default function Facturas() {
           </section>
         </div>
       </div>
+
+      {/* ── Panel Interno: Utilidad Real ── (NUNCA visible al imprimir) */}
+      <section className="print-hide bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🔒</span>
+          <h2 className="font-bold text-amber-900 dark:text-amber-200 text-sm uppercase tracking-wide">
+            Panel Interno — Utilidad Real (Escenario B)
+          </h2>
+          <span className="ml-auto text-xs text-amber-600 dark:text-amber-400 italic">No aparece en la factura del cliente</span>
+        </div>
+
+        {/* Métricas calculadas automáticamente */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[
+            { label: "Ingresos Totales", value: totalRevenue, color: "text-emerald-700 dark:text-emerald-400" },
+            { label: "Costo Base", value: totalBaseCost, color: "text-red-600 dark:text-red-400" },
+            { label: "Utilidad Bruta", value: grossProfit, color: "text-blue-700 dark:text-blue-400" },
+            { label: "Pago al Socio (50%)", value: partnerPayout, color: "text-purple-700 dark:text-purple-400" },
+            { label: "Mi Bruto (50%)", value: ownerGross, color: "text-indigo-700 dark:text-indigo-400" },
+            { label: "Mi Utilidad Real", value: ownerRealIncome, color: ownerRealIncome >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-white dark:bg-amber-900/20 rounded-lg p-3 border border-amber-100 dark:border-amber-800">
+              <div className="text-xs text-amber-700 dark:text-amber-400 font-medium mb-1">{label}</div>
+              <div className={`text-sm font-bold ${color}`}>{formatCurrency(value)}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Inputs del dueño */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Gastos internos */}
+          <div className="space-y-1.5">
+            <Label className="text-sm text-amber-800 dark:text-amber-300 font-semibold">
+              Gastos Operativos Internos (L)
+            </Label>
+            <Input
+              id="internal-expenses"
+              type="number"
+              min={0}
+              step="0.01"
+              className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm"
+              placeholder="0.00"
+              value={internalExpenses || ""}
+              onChange={e => setInternalExpenses(Number(e.target.value) || 0)}
+            />
+          </div>
+
+          {/* Nota de gastos */}
+          <div className="space-y-1.5">
+            <Label className="text-sm text-amber-800 dark:text-amber-300 font-semibold">
+              Nota de Gastos (ej. envío, empaques)
+            </Label>
+            <Input
+              id="internal-expenses-note"
+              type="text"
+              className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm"
+              placeholder="Descripción opcional..."
+              value={internalExpensesNote}
+              onChange={e => setInternalExpensesNote(e.target.value)}
+            />
+          </div>
+
+          {/* Impuestos / Reserva SAR */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label className="text-sm text-amber-800 dark:text-amber-300 font-semibold">
+              Reserva para Impuestos (SAR / Municipalidad)
+            </Label>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setTaxMode("manual")}
+                className={`text-xs px-3 py-1.5 rounded-md border font-semibold transition-colors ${taxMode === "manual" ? "bg-amber-600 text-white border-amber-600" : "bg-white dark:bg-transparent border-amber-300 text-amber-700 dark:text-amber-300"}`}
+              >
+                Monto Fijo (L)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaxMode("percent")}
+                className={`text-xs px-3 py-1.5 rounded-md border font-semibold transition-colors ${taxMode === "percent" ? "bg-amber-600 text-white border-amber-600" : "bg-white dark:bg-transparent border-amber-300 text-amber-700 dark:text-amber-300"}`}
+              >
+                Porcentaje (%)
+              </button>
+              {taxMode === "manual" ? (
+                <Input
+                  id="profit-taxes-amount"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm flex-1"
+                  placeholder="0.00"
+                  value={profitTaxes || ""}
+                  onChange={e => setProfitTaxes(Number(e.target.value) || 0)}
+                />
+              ) : (
+                <div className="flex items-center gap-2 flex-1">
+                  <Input
+                    id="profit-taxes-percent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.1"
+                    className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm"
+                    placeholder="0.0"
+                    value={taxPercent || ""}
+                    onChange={e => setTaxPercent(Number(e.target.value) || 0)}
+                  />
+                  <span className="text-sm text-amber-700 dark:text-amber-400 shrink-0">% = {formatCurrency(computedTaxes)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── Products table (full width) ── */}
       <section className="bg-card rounded-xl border overflow-hidden">

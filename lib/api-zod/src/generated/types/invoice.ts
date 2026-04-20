@@ -67,6 +67,13 @@ export const CreateInvoiceBody = z.object({
   transportista: z.string().optional(),
   fotoGuiaPath: z.string().optional(),
   estadoEntrega: z.string().default("Pendiente"),
+  // ── Cálculo de Utilidad Real (Panel Interno) ─────────────────────────────
+  baseCost: z.number().min(0).optional(),
+  internalExpenses: z.number().min(0).default(0),
+  internalExpensesNote: z.string().optional(),
+  taxes: z.number().min(0).default(0),
+  partnerPayout: z.number().optional(),
+  ownerPayout: z.number().optional(),
   items: z.array(CreateInvoiceItemBody).min(1),
 });
 
@@ -90,6 +97,13 @@ export const UpdateInvoiceBody = z.object({
   transportista: z.string().optional(),
   fotoGuiaPath: z.string().optional(),
   estadoEntrega: z.string().optional(),
+  // ── Cálculo de Utilidad Real (Panel Interno) ─────────────────────────────
+  baseCost: z.number().min(0).optional(),
+  internalExpenses: z.number().min(0).optional(),
+  internalExpensesNote: z.string().optional(),
+  taxes: z.number().min(0).optional(),
+  partnerPayout: z.number().optional(),
+  ownerPayout: z.number().optional(),
   items: z.array(CreateInvoiceItemBody).min(1).optional(),
 });
 

@@ -138,6 +138,13 @@ router.post("/invoices", async (req, res): Promise<void> => {
     transportista: invoiceData.transportista ?? null,
     fotoGuiaPath: invoiceData.fotoGuiaPath ?? null,
     estadoEntrega: invoiceData.estadoEntrega ?? "Pendiente",
+    // ── Utilidad Real ─────────────────────────────────────────────────────────
+    baseCost: invoiceData.baseCost != null ? String(invoiceData.baseCost) : null,
+    internalExpenses: String(invoiceData.internalExpenses ?? 0),
+    internalExpensesNote: invoiceData.internalExpensesNote ?? null,
+    taxes: String(invoiceData.taxes ?? 0),
+    partnerPayout: invoiceData.partnerPayout != null ? String(invoiceData.partnerPayout) : null,
+    ownerPayout: invoiceData.ownerPayout != null ? String(invoiceData.ownerPayout) : null,
   }).returning();
 
   const insertedItems = await db.insert(invoiceItemsTable).values(
@@ -353,6 +360,13 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
     ...(updateData.transportista !== undefined && { transportista: updateData.transportista ?? null }),
     ...(updateData.fotoGuiaPath !== undefined && { fotoGuiaPath: updateData.fotoGuiaPath ?? null }),
     ...(updateData.estadoEntrega !== undefined && { estadoEntrega: updateData.estadoEntrega }),
+    // ── Utilidad Real ─────────────────────────────────────────────────────────
+    ...(updateData.baseCost != null && { baseCost: String(updateData.baseCost) }),
+    ...(updateData.internalExpenses != null && { internalExpenses: String(updateData.internalExpenses) }),
+    ...(updateData.internalExpensesNote !== undefined && { internalExpensesNote: updateData.internalExpensesNote ?? null }),
+    ...(updateData.taxes != null && { taxes: String(updateData.taxes) }),
+    ...(updateData.partnerPayout != null && { partnerPayout: String(updateData.partnerPayout) }),
+    ...(updateData.ownerPayout != null && { ownerPayout: String(updateData.ownerPayout) }),
   }).where(eq(invoicesTable.id, params.data.id)).returning();
 
   const updatedItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, params.data.id));
