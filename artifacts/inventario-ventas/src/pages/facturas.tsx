@@ -1135,10 +1135,14 @@ export default function Facturas() {
   const totalRevenue = form.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
   const totalBaseCost = form.items.reduce((s, it) => s + it.quantity * (it.costPrice ?? 0), 0);
   const grossProfit = totalRevenue - totalBaseCost;
-  const partnerPayout = grossProfit * 0.5;
-  const ownerGross = grossProfit * 0.5;
+  
+  // Los gastos internos se restan de la utilidad ANTES de repartir (Gastos compartidos)
+  const netBusinessProfit = grossProfit - internalExpenses;
+  const partnerPayout = netBusinessProfit * 0.5;
+  const ownerGross = netBusinessProfit * 0.5;
+  
   const computedTaxes = taxMode === "percent" ? ownerGross * (taxPercent / 100) : profitTaxes;
-  const ownerRealIncome = ownerGross - internalExpenses - computedTaxes;
+  const ownerRealIncome = ownerGross - computedTaxes;
 
   const handleSubmit = async () => {
     if (!form.clientName.trim()) {
@@ -1174,6 +1178,9 @@ export default function Facturas() {
           productId: it.productId,
           productType: it.productType,
         })),
+        numeroGuia: form.numeroGuia || undefined,
+        transportista: form.transportista || undefined,
+        estadoEntrega: form.estadoEntrega || "Pendiente",
         // ── Utilidad Real ────────────────────────────────────────────────
         baseCost: totalBaseCost,
         internalExpenses,
@@ -1960,6 +1967,294 @@ export default function Facturas() {
             </div>
           </section>
 
+          {/* ── Products table (Moving up as requested: "Papel de Facturas") ── */}
+          <section className="bg-card rounded-xl border overflow-hidden">
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Productos / Servicios</h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-8">#</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Descripción / Inventario</th>
+                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-24">Cant.</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-32">Precio Unit.</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-28">Total</th>
+                    <th className="w-10" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.map((item, i) => (
+                    <tr key={i} className="border-b last:border-b-0 align-top">
+                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs pt-4">{i + 1}</td>
+                      <td className="px-4 py-3 min-w-[280px]">
+                        <div className="relative mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col shrink-0">
+                              <Input
+                                type="text"
+                                className="bg-background h-8 text-sm text-center w-24 shrink-0"
+                                placeholder="Código"
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleCodeSearch(i, (e.currentTarget.value ?? "").trim());
+                                  }
+                                }}
+                              />
+                              {codeError[i] && (
+                                <span className="text-xs text-red-500 font-medium mt-0.5 text-center">No encontrado</span>
+                              )}
+                            </div>
+                            <div className="relative flex-1">
+                              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                              <Input
+                                className="pl-8 pr-7 bg-background h-8 text-sm"
+                                placeholder="Buscar producto..."
+                                value={itemSearch[i] ?? ""}
+                                onChange={e => {
+                                  setItemSearch(s => ({ ...s, [i]: e.target.value }));
+                                  setItemDropOpen(s => ({ ...s, [i]: true }));
+                                }}
+                                onFocus={() => setItemDropOpen(s => ({ ...s, [i]: true }))}
+                                onBlur={() => setTimeout(() => setItemDropOpen(s => ({ ...s, [i]: false })), 150)}
+                              />
+                              {(itemSearch[i] || item.productId) && (
+                                <button
+                                  type="button"
+                                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                                  onClick={() => {
+                                    setItemSearch(s => ({ ...s, [i]: "" }));
+                                    setForm(f => {
+                                      const items = [...f.items];
+                                      items[i] = { ...items[i], productId: undefined, productType: undefined };
+                                      return { ...f, items };
+                                    });
+                                  }}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {itemDropOpen[i] && (itemSearch[i] ?? "").length > 0 && (
+                            <div className="absolute z-50 left-[72px] right-0 mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                              {products
+                                .filter(p => p.label.toLowerCase().includes((itemSearch[i] ?? "").toLowerCase()))
+                                .slice(0, 12)
+                                .map(p => (
+                                  <button
+                                    key={`${p.type}-${p.id}`}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2 first:rounded-t-xl last:rounded-b-xl"
+                                    onMouseDown={() => selectProduct(i, p)}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className={`text-xs px-1.5 py-0.5 rounded font-semibold shrink-0 ${p.type === "perfumeria" ? "bg-purple-100 text-purple-700" : "bg-cyan-100 text-cyan-700"}`}>
+                                        {p.type === "perfumeria" ? "Perf." : "Sub."}
+                                      </span>
+                                      <span className="truncate text-foreground font-medium">{p.label}</span>
+                                    </div>
+                                    <span className="text-xs font-bold text-foreground shrink-0">{formatCurrency(p.price)}</span>
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                        <Input
+                          className="bg-background h-8 text-sm"
+                          value={item.description}
+                          onChange={e => updateItem(i, "description", e.target.value)}
+                          placeholder="Descripción del ítem *"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="number"
+                          min={1}
+                          className="bg-background h-8 text-sm text-center w-full"
+                          value={item.quantity}
+                          onChange={e => updateItem(i, "quantity", Number(e.target.value))}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className="bg-background h-8 text-sm text-right w-full"
+                          value={item.unitPrice}
+                          onChange={e => updateItem(i, "unitPrice", Number(e.target.value))}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-foreground pt-4">
+                        {formatCurrency(item.quantity * item.unitPrice)}
+                      </td>
+                      <td className="px-2 py-3 pt-3">
+                        <button
+                          type="button"
+                          disabled={form.items.length === 1}
+                          onClick={() => removeItem(i)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-3 border-t">
+              <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-blue-600 font-semibold" onClick={addItem}>
+                <Plus className="h-4 w-4" /> Agregar línea
+              </Button>
+            </div>
+          </section>
+
+          {/* ── Panel Interno (Restaurado a versión completa) ── */}
+          <section className="print-hide bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800 p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🔒</span>
+              <h2 className="font-bold text-amber-900 dark:text-amber-200 text-sm uppercase tracking-wide">
+                Panel Interno — Utilidad Real (Escenario B)
+              </h2>
+              <span className="ml-auto text-[10px] text-amber-600 italic">No visible en impresión</span>
+            </div>
+
+            {/* Métricas calculadas automáticamente */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[
+                { label: "Ingresos Totales", value: totalRevenue, color: "text-emerald-700 dark:text-emerald-400" },
+                { label: "Costo Base", value: totalBaseCost, color: "text-red-600 dark:text-red-400" },
+                { label: "Utilidad Bruta", value: grossProfit, color: "text-blue-700 dark:text-blue-400" },
+                { label: "Pago al Socio (50%)", value: partnerPayout, color: "text-purple-700 dark:text-purple-400" },
+                { label: "Mi Bruto (50%)", value: ownerGross, color: "text-indigo-700 dark:text-indigo-400" },
+                { label: "Mi Utilidad Real", value: ownerRealIncome, color: ownerRealIncome >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-white dark:bg-amber-900/40 rounded-lg p-2.5 border border-amber-200 dark:border-amber-800 shadow-sm">
+                  <div className="text-[10px] text-amber-800 dark:text-amber-200 font-bold mb-0.5 uppercase tracking-tighter">{label}</div>
+                  <div className={`text-sm font-black ${color}`}>{formatCurrency(value)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Inputs del dueño */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-amber-900 dark:text-amber-200 font-bold uppercase tracking-tight">Gastos Operativos (L)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium"
+                    placeholder="0.00"
+                    value={internalExpenses || ""}
+                    onChange={e => setInternalExpenses(Number(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-amber-900 dark:text-amber-200 font-bold uppercase tracking-tight">Nota de Gastos</Label>
+                  <Input
+                    type="text"
+                    className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium"
+                    placeholder="Ej. Envío Forza..."
+                    value={internalExpensesNote}
+                    onChange={e => setInternalExpensesNote(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-amber-900 dark:text-amber-200 font-bold uppercase tracking-tight">Reserva para Impuestos</Label>
+                <div className="flex gap-2">
+                  <div className="flex bg-background border border-amber-300 dark:border-amber-700 rounded-md p-1 h-9 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setTaxMode("manual")}
+                      className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${taxMode === "manual" ? "bg-amber-600 text-white shadow-sm" : "text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/50"}`}
+                    >
+                      LPS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTaxMode("percent")}
+                      className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${taxMode === "percent" ? "bg-amber-600 text-white shadow-sm" : "text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/50"}`}
+                    >
+                      %
+                    </button>
+                  </div>
+                  {taxMode === "manual" ? (
+                    <Input
+                      type="number"
+                      className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium"
+                      placeholder="0.00"
+                      value={profitTaxes || ""}
+                      onChange={e => setProfitTaxes(Number(e.target.value) || 0)}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 flex-1">
+                      <Input
+                        type="number"
+                        className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium w-24"
+                        placeholder="%"
+                        value={taxPercent || ""}
+                        onChange={e => setTaxPercent(Number(e.target.value) || 0)}
+                      />
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-bold">= {formatCurrency(computedTaxes)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Section: Logística (New) */}
+          <section className="bg-card rounded-xl border p-5 space-y-4">
+            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Logística y Entrega</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground font-medium">Transportista</Label>
+                <Select value={form.transportista} onValueChange={v => setForm(f => ({ ...f, transportista: v }))}>
+                  <SelectTrigger className="h-9 bg-background">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Forza">Forza Delivery</SelectItem>
+                    <SelectItem value="CAEX">CAEX Logistics</SelectItem>
+                    <SelectItem value="C807">C807</SelectItem>
+                    <SelectItem value="Recogida">Recogida en Tienda</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground font-medium">Estado Entrega</Label>
+                <Select value={form.estadoEntrega} onValueChange={v => setForm(f => ({ ...f, estadoEntrega: v }))}>
+                  <SelectTrigger className="h-9 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pendiente">Pendiente</SelectItem>
+                    <SelectItem value="En Tránsito">En Tránsito</SelectItem>
+                    <SelectItem value="Entregado">Entregado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs text-muted-foreground font-medium">Número de Guía</Label>
+                <Input
+                  className="h-9 bg-background"
+                  value={form.numeroGuia}
+                  onChange={e => setForm(f => ({ ...f, numeroGuia: e.target.value }))}
+                  placeholder="Ej. FOR-123456"
+                />
+              </div>
+            </div>
+          </section>
+
           {/* Section: Detalles de Pago */}
           <section className="bg-card rounded-xl border p-5 space-y-4">
             <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">
@@ -2071,312 +2366,6 @@ export default function Facturas() {
           </section>
         </div>
       </div>
-
-      {/* ── Panel Interno: Utilidad Real ── (NUNCA visible al imprimir) */}
-      <section className="print-hide bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800 p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🔒</span>
-          <h2 className="font-bold text-amber-900 dark:text-amber-200 text-sm uppercase tracking-wide">
-            Panel Interno — Utilidad Real (Escenario B)
-          </h2>
-          <span className="ml-auto text-xs text-amber-600 dark:text-amber-400 italic">No aparece en la factura del cliente</span>
-        </div>
-
-        {/* Métricas calculadas automáticamente */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {[
-            { label: "Ingresos Totales", value: totalRevenue, color: "text-emerald-700 dark:text-emerald-400" },
-            { label: "Costo Base", value: totalBaseCost, color: "text-red-600 dark:text-red-400" },
-            { label: "Utilidad Bruta", value: grossProfit, color: "text-blue-700 dark:text-blue-400" },
-            { label: "Pago al Socio (50%)", value: partnerPayout, color: "text-purple-700 dark:text-purple-400" },
-            { label: "Mi Bruto (50%)", value: ownerGross, color: "text-indigo-700 dark:text-indigo-400" },
-            { label: "Mi Utilidad Real", value: ownerRealIncome, color: ownerRealIncome >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400" },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white dark:bg-amber-900/20 rounded-lg p-3 border border-amber-100 dark:border-amber-800">
-              <div className="text-xs text-amber-700 dark:text-amber-400 font-medium mb-1">{label}</div>
-              <div className={`text-sm font-bold ${color}`}>{formatCurrency(value)}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Inputs del dueño */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Gastos internos */}
-          <div className="space-y-1.5">
-            <Label className="text-sm text-amber-800 dark:text-amber-300 font-semibold">
-              Gastos Operativos Internos (L)
-            </Label>
-            <Input
-              id="internal-expenses"
-              type="number"
-              min={0}
-              step="0.01"
-              className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm"
-              placeholder="0.00"
-              value={internalExpenses || ""}
-              onChange={e => setInternalExpenses(Number(e.target.value) || 0)}
-            />
-          </div>
-
-          {/* Nota de gastos */}
-          <div className="space-y-1.5">
-            <Label className="text-sm text-amber-800 dark:text-amber-300 font-semibold">
-              Nota de Gastos (ej. envío, empaques)
-            </Label>
-            <Input
-              id="internal-expenses-note"
-              type="text"
-              className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm"
-              placeholder="Descripción opcional..."
-              value={internalExpensesNote}
-              onChange={e => setInternalExpensesNote(e.target.value)}
-            />
-          </div>
-
-          {/* Impuestos / Reserva SAR */}
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-sm text-amber-800 dark:text-amber-300 font-semibold">
-              Reserva para Impuestos (SAR / Municipalidad)
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setTaxMode("manual")}
-                className={`text-xs px-3 py-1.5 rounded-md border font-semibold transition-colors ${taxMode === "manual" ? "bg-amber-600 text-white border-amber-600" : "bg-white dark:bg-transparent border-amber-300 text-amber-700 dark:text-amber-300"}`}
-              >
-                Monto Fijo (L)
-              </button>
-              <button
-                type="button"
-                onClick={() => setTaxMode("percent")}
-                className={`text-xs px-3 py-1.5 rounded-md border font-semibold transition-colors ${taxMode === "percent" ? "bg-amber-600 text-white border-amber-600" : "bg-white dark:bg-transparent border-amber-300 text-amber-700 dark:text-amber-300"}`}
-              >
-                Porcentaje (%)
-              </button>
-              {taxMode === "manual" ? (
-                <Input
-                  id="profit-taxes-amount"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm flex-1"
-                  placeholder="0.00"
-                  value={profitTaxes || ""}
-                  onChange={e => setProfitTaxes(Number(e.target.value) || 0)}
-                />
-              ) : (
-                <div className="flex items-center gap-2 flex-1">
-                  <Input
-                    id="profit-taxes-percent"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.1"
-                    className="bg-white dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 h-9 text-sm"
-                    placeholder="0.0"
-                    value={taxPercent || ""}
-                    onChange={e => setTaxPercent(Number(e.target.value) || 0)}
-                  />
-                  <span className="text-sm text-amber-700 dark:text-amber-400 shrink-0">% = {formatCurrency(computedTaxes)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Products table (full width) ── */}
-      <section className="bg-card rounded-xl border overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Productos / Servicios</h2>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-8">#</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Descripción / Inventario</th>
-                <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-24">Cant.</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-32">Precio Unit.</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-28">Total</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {form.items.map((item, i) => (
-                <tr key={i} className="border-b last:border-b-0 align-top">
-                  {/* # */}
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs pt-4">{i + 1}</td>
-
-                  {/* Description + product search */}
-                  <td className="px-4 py-3 min-w-[280px]">
-                    {/* Product search input */}
-                    <div className="relative mb-2">
-                      <div className="flex items-center gap-1.5">
-                        {/* Code search mini input */}
-                        <div className="flex flex-col shrink-0">
-                          <Input
-                            type="text"
-                            className="bg-background h-8 text-sm text-center w-24 shrink-0"
-                            placeholder="Código"
-                            title="Escribir código y presionar Enter"
-                            onKeyDown={e => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleCodeSearch(i, (e.currentTarget.value ?? "").trim());
-                              }
-                            }}
-                          />
-                          {codeError[i] && (
-                            <span className="text-xs text-red-500 font-medium mt-0.5 text-center">No encontrado</span>
-                          )}
-                        </div>
-                        {/* Name search */}
-                        <div className="relative flex-1">
-                          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                          <Input
-                            className="pl-8 pr-7 bg-background h-8 text-sm"
-                            placeholder="Buscar producto..."
-                            value={itemSearch[i] ?? ""}
-                            onChange={e => {
-                              setItemSearch(s => ({ ...s, [i]: e.target.value }));
-                              setItemDropOpen(s => ({ ...s, [i]: true }));
-                            }}
-                            onFocus={() => setItemDropOpen(s => ({ ...s, [i]: true }))}
-                            onBlur={() => setTimeout(() => setItemDropOpen(s => ({ ...s, [i]: false })), 150)}
-                          />
-                          {(itemSearch[i] || item.productId) && (
-                            <button
-                              type="button"
-                              className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => {
-                                setItemSearch(s => ({ ...s, [i]: "" }));
-                                setForm(f => {
-                                  const items = [...f.items];
-                                  items[i] = { ...items[i], productId: undefined, productType: undefined };
-                                  return { ...f, items };
-                                });
-                              }}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        {/* Type badge */}
-                        {item.productId && item.productType && (
-                          <span className={`text-xs px-2 py-0.5 rounded-md font-semibold shrink-0 ${item.productType === "perfumeria"
-                            ? "bg-purple-100 text-purple-700"
-                            : "bg-cyan-100 text-cyan-700"
-                            }`}>
-                            {item.productType === "perfumeria" ? "Perfumería" : "Sublimación"}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Product dropdown */}
-                      {itemDropOpen[i] && (itemSearch[i] ?? "").length > 0 && (
-                        <div className="absolute z-50 left-[72px] right-0 mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                          {products
-                            .filter(p => p.label.toLowerCase().includes((itemSearch[i] ?? "").toLowerCase()))
-                            .slice(0, 12)
-                            .map(p => (
-                              <button
-                                key={`${p.type}-${p.id}`}
-                                type="button"
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2 first:rounded-t-xl last:rounded-b-xl"
-                                onMouseDown={() => selectProduct(i, p)}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold shrink-0 ${p.type === "perfumeria"
-                                    ? "bg-purple-100 text-purple-700"
-                                    : "bg-cyan-100 text-cyan-700"
-                                    }`}>
-                                    {p.type === "perfumeria" ? "Perf." : "Sub."}
-                                  </span>
-                                  <span className="truncate text-foreground font-medium">{p.label}</span>
-                                </div>
-                                <span className="text-xs font-bold text-foreground shrink-0">{formatCurrency(p.price)}</span>
-                              </button>
-                            ))}
-                          {products.filter(p => p.label.toLowerCase().includes((itemSearch[i] ?? "").toLowerCase())).length === 0 && (
-                            <p className="px-3 py-3 text-sm text-muted-foreground text-center">Sin resultados</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Description input */}
-                    <Input
-                      className="bg-background h-8 text-sm"
-                      value={item.description}
-                      onChange={e => updateItem(i, "description", e.target.value)}
-                      placeholder="Descripción del ítem *"
-                    />
-                    {item.productId && (
-                      <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3" /> Producto vinculado — se descontará del inventario
-                      </p>
-                    )}
-                  </td>
-
-                  {/* Quantity */}
-                  <td className="px-4 py-3">
-                    <Input
-                      type="number"
-                      min={1}
-                      className="bg-background h-8 text-sm text-center w-full"
-                      value={item.quantity}
-                      onChange={e => updateItem(i, "quantity", Number(e.target.value))}
-                    />
-                  </td>
-
-                  {/* Unit price */}
-                  <td className="px-4 py-3">
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className="bg-background h-8 text-sm text-right w-full"
-                      value={item.unitPrice}
-                      onChange={e => updateItem(i, "unitPrice", Number(e.target.value))}
-                    />
-                  </td>
-
-                  {/* Row total */}
-                  <td className="px-4 py-3 text-right font-semibold text-foreground pt-4">
-                    {formatCurrency(item.quantity * item.unitPrice)}
-                  </td>
-
-                  {/* Delete */}
-                  <td className="px-2 py-3 pt-3">
-                    <button
-                      type="button"
-                      disabled={form.items.length === 1}
-                      onClick={() => removeItem(i)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="px-5 py-3 border-t">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-semibold"
-            onClick={addItem}
-          >
-            <Plus className="h-4 w-4" /> Agregar línea
-          </Button>
-        </div>
-      </section>
 
       {/* ── Delete AlertDialog ── */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

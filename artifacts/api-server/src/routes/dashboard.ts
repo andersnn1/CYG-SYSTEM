@@ -58,11 +58,15 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   // Monthly invoices sales (status != cancelada)
   const [invoiceSalesResult] = await db.select({
     total: sql<number>`COALESCE(SUM(${invoicesTable.total}), 0)`,
+    ownerPayout: sql<number>`COALESCE(SUM(${invoicesTable.ownerPayout}), 0)`,
+    partnerPayout: sql<number>`COALESCE(SUM(${invoicesTable.partnerPayout}), 0)`,
   }).from(invoicesTable)
     .where(
       sql`${invoicesTable.status} != 'cancelada' AND EXTRACT(MONTH FROM ${invoicesTable.issueDate}::date) = ${currentMonth} AND EXTRACT(YEAR FROM ${invoicesTable.issueDate}::date) = ${currentYear}`
     );
   const monthlySales = Number(invoiceSalesResult?.total ?? 0);
+  const monthlyRealProfit = Number(invoiceSalesResult?.ownerPayout ?? 0);
+  const monthlyPartnerProfit = Number(invoiceSalesResult?.partnerPayout ?? 0);
 
   // Monthly goal
   const [goalResult] = await db.select().from(monthlyGoalsTable)
@@ -87,6 +91,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     lowStockCount,
     monthlyExpenses,
     monthlySales,
+    monthlyRealProfit,
+    monthlyPartnerProfit,
     monthlyGoal,
   });
 });
