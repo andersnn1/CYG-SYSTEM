@@ -22,6 +22,8 @@ tags:
     description: Sales operations
   - name: reports
     description: Report generation operations
+  - name: invoices
+    description: Invoice operations
 
 paths:
   /healthz:
@@ -606,6 +608,137 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonthlyReport"
 
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List all invoices
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceBody"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get an invoice by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInvoiceBody"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /invoices/{id}/guia:
+    post:
+      operationId: uploadInvoiceGuia
+      tags: [invoices]
+      summary: Upload guide evidence for an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                foto:
+                  type: string
+                  format: binary
+                numeroGuia:
+                  type: string
+                transportista:
+                  type: string
+      responses:
+        "200":
+          description: Guide uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
 components:
   schemas:
     HealthStatus:
@@ -715,6 +848,8 @@ components:
           type: number
         description:
           type: ["string", "null"]
+        code:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -747,6 +882,8 @@ components:
           type: number
         description:
           type: ["string", "null"]
+        code:
+          type: ["string", "null"]
       required:
         - name
         - brand
@@ -772,6 +909,8 @@ components:
           type: number
         description:
           type: ["string", "null"]
+        code:
+          type: ["string", "null"]
 
     SublimationItem:
       type: object
@@ -792,6 +931,8 @@ components:
         salePrice:
           type: number
         description:
+          type: ["string", "null"]
+        code:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -825,6 +966,8 @@ components:
           type: number
         description:
           type: ["string", "null"]
+        code:
+          type: ["string", "null"]
       required:
         - name
         - category
@@ -849,6 +992,8 @@ components:
         salePrice:
           type: number
         description:
+          type: ["string", "null"]
+        code:
           type: ["string", "null"]
 
     Client:
@@ -1151,3 +1296,242 @@ components:
         - month
         - year
         - targetAmount
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNumber:
+          type: string
+        clientId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        clientPhone:
+          type: ["string", "null"]
+        clientEmail:
+          type: ["string", "null"]
+        clientAddress:
+          type: ["string", "null"]
+        clientCity:
+          type: ["string", "null"]
+        clientDepartment:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pendiente, pagada, cancelada]
+        subtotal:
+          type: number
+        discount:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        notes:
+          type: ["string", "null"]
+        clientRtn:
+          type: ["string", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        transferReference:
+          type: ["string", "null"]
+        issueDate:
+          type: string
+        dueDate:
+          type: ["string", "null"]
+        numeroGuia:
+          type: ["string", "null"]
+        transportista:
+          type: ["string", "null"]
+        fotoGuiaPath:
+          type: ["string", "null"]
+        estadoEntrega:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - invoiceNumber
+        - clientName
+        - status
+        - subtotal
+        - discount
+        - tax
+        - total
+        - issueDate
+        - estadoEntrega
+        - createdAt
+        - updatedAt
+
+    InvoiceItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceId:
+          type: integer
+        description:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        total:
+          type: number
+      required:
+        - id
+        - invoiceId
+        - description
+        - quantity
+        - unitPrice
+        - total
+
+    CreateInvoiceBody:
+      type: object
+      properties:
+        clientId:
+          type: integer
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        clientEmail:
+          type: string
+        clientAddress:
+          type: string
+        clientCity:
+          type: string
+        clientDepartment:
+          type: string
+        discount:
+          type: number
+        tax:
+          type: number
+        notes:
+          type: string
+        clientRtn:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [efectivo, tarjeta, transferencia, cheque]
+        transferReference:
+          type: string
+        issueDate:
+          type: string
+        dueDate:
+          type: string
+        numeroGuia:
+          type: string
+        transportista:
+          type: string
+        fotoGuiaPath:
+          type: string
+        estadoEntrega:
+          type: string
+        baseCost:
+          type: number
+        internalExpenses:
+          type: number
+        internalExpensesNote:
+          type: string
+        taxes:
+          type: number
+        partnerPayout:
+          type: number
+        ownerPayout:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceItemBody"
+      required:
+        - clientName
+        - issueDate
+        - items
+
+    CreateInvoiceItemBody:
+      type: object
+      properties:
+        description:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        productId:
+          type: integer
+        productType:
+          type: string
+          enum: [perfumeria, sublimacion, combo]
+      required:
+        - description
+        - quantity
+        - unitPrice
+
+    UpdateInvoiceBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pendiente, pagada, cancelada]
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        clientEmail:
+          type: string
+        clientAddress:
+          type: string
+        clientCity:
+          type: string
+        clientDepartment:
+          type: string
+        discount:
+          type: number
+        tax:
+          type: number
+        notes:
+          type: string
+        clientRtn:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [efectivo, tarjeta, transferencia, cheque]
+        transferReference:
+          type: string
+        issueDate:
+          type: string
+        dueDate:
+          type: string
+        numeroGuia:
+          type: string
+        transportista:
+          type: string
+        fotoGuiaPath:
+          type: string
+        estadoEntrega:
+          type: string
+        baseCost:
+          type: number
+        internalExpenses:
+          type: number
+        internalExpensesNote:
+          type: string
+        taxes:
+          type: number
+        partnerPayout:
+          type: number
+        ownerPayout:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceItemBody"

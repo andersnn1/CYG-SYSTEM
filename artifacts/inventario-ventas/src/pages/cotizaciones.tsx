@@ -1046,7 +1046,9 @@ export default function Cotizaciones() {
                         <div className="flex items-center gap-2">
                           {q.quoteNumber}
                           {q.status === "pendiente" && (Date.now() - new Date(q.createdAt).getTime() > 48 * 3600 * 1000) && (
-                            <AlertTriangle className="h-4 w-4 text-red-500" title="Prioridad: +48 hrs pendiente" />
+                            <span title="Prioridad: +48 hrs pendiente">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                            </span>
                           )}
                         </div>
                       </td>
@@ -1118,7 +1120,9 @@ export default function Cotizaciones() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono font-bold text-foreground">{q.quoteNumber}</span>
                           {q.status === "pendiente" && (Date.now() - new Date(q.createdAt).getTime() > 48 * 3600 * 1000) && (
-                            <AlertTriangle className="h-4 w-4 text-red-500" title="Prioridad: +48 hrs pendiente" />
+                            <span title="Prioridad: +48 hrs pendiente">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                            </span>
                           )}
                           <StatusBadge status={q.status} />
                         </div>

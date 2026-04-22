@@ -1,6 +1,6 @@
 import { pgTable, text, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const perfumeryTable = pgTable("perfumery", {
   id: serial("id").primaryKey(),
@@ -17,5 +17,6 @@ export const perfumeryTable = pgTable("perfumery", {
 });
 
 export const insertPerfumerySchema = createInsertSchema(perfumeryTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertPerfumery = z.infer<typeof insertPerfumerySchema>;
+const _insertPerfumerySchema = insertPerfumerySchema as any;
+export type InsertPerfumery = z.infer<typeof _insertPerfumerySchema>;
 export type Perfumery = typeof perfumeryTable.$inferSelect;

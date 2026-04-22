@@ -14,7 +14,7 @@ interface DatePickerCalendarProps {
   title?: string;
   defaultToToday?: boolean;
   modifiers?: Record<string, Date[]>;
-  modifierClassNames?: Record<string, string>;
+  modifiersClassNames?: Record<string, string>;
   modifiersStyles?: Record<string, React.CSSProperties>;
   customButtonStyles?: Record<string, React.CSSProperties>;
   onDayClick?: (day: Date, modifiers: Record<string, boolean>) => void;
@@ -91,7 +91,7 @@ export function DatePickerCalendar({
   title = "Fecha de vencimiento",
   defaultToToday = false,
   modifiers,
-  modifierClassNames,
+  modifiersClassNames,
   modifiersStyles,
   customButtonStyles,
   onDayClick,
@@ -151,7 +151,7 @@ export function DatePickerCalendar({
           disabled={disablePast ? { before: today } : undefined}
           classNames={calendarClassNames}
           modifiers={modifiers}
-          modifierClassNames={modifierClassNames}
+          modifiersClassNames={modifiersClassNames}
           modifiersStyles={modifiersStyles}
           onDayClick={onDayClick}
           components={{

@@ -15,4 +15,6 @@ export interface UpdatePerfumeryItemBody {
   salePrice?: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
 }

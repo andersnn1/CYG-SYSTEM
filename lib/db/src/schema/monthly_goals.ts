@@ -1,6 +1,6 @@
 import { pgTable, serial, numeric, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const monthlyGoalsTable = pgTable("monthly_goals", {
   id: serial("id").primaryKey(),
@@ -11,5 +11,6 @@ export const monthlyGoalsTable = pgTable("monthly_goals", {
 });
 
 export const insertMonthlyGoalSchema = createInsertSchema(monthlyGoalsTable).omit({ id: true, createdAt: true });
-export type InsertMonthlyGoal = z.infer<typeof insertMonthlyGoalSchema>;
+const _insertMonthlyGoalSchema = insertMonthlyGoalSchema as any;
+export type InsertMonthlyGoal = z.infer<typeof _insertMonthlyGoalSchema>;
 export type MonthlyGoal = typeof monthlyGoalsTable.$inferSelect;

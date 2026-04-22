@@ -15,4 +15,6 @@ export interface CreatePerfumeryItemBody {
   salePrice: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
 }

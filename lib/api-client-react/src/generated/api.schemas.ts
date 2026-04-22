@@ -51,6 +51,8 @@ export interface PerfumeryItem {
   salePrice: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +66,8 @@ export interface CreatePerfumeryItemBody {
   salePrice: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
 }
 
 export interface UpdatePerfumeryItemBody {
@@ -75,6 +79,8 @@ export interface UpdatePerfumeryItemBody {
   salePrice?: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
 }
 
 export type SublimationItemItemType =
@@ -96,6 +102,8 @@ export interface SublimationItem {
   salePrice: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,6 +126,8 @@ export interface CreateSublimationItemBody {
   salePrice: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
 }
 
 export type UpdateSublimationItemBodyItemType =
@@ -138,6 +148,8 @@ export interface UpdateSublimationItemBody {
   salePrice?: number;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  code?: string | null;
 }
 
 export interface Client {
@@ -303,6 +315,171 @@ export interface SetMonthlyGoalBody {
   targetAmount: number;
 }
 
+export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
+
+export const InvoiceStatus = {
+  pendiente: "pendiente",
+  pagada: "pagada",
+  cancelada: "cancelada",
+} as const;
+
+export interface InvoiceItem {
+  id: number;
+  invoiceId: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  /** @nullable */
+  clientId?: number | null;
+  clientName: string;
+  /** @nullable */
+  clientPhone?: string | null;
+  /** @nullable */
+  clientEmail?: string | null;
+  /** @nullable */
+  clientAddress?: string | null;
+  /** @nullable */
+  clientCity?: string | null;
+  /** @nullable */
+  clientDepartment?: string | null;
+  status: InvoiceStatus;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  clientRtn?: string | null;
+  /** @nullable */
+  paymentMethod?: string | null;
+  /** @nullable */
+  transferReference?: string | null;
+  issueDate: string;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  numeroGuia?: string | null;
+  /** @nullable */
+  transportista?: string | null;
+  /** @nullable */
+  fotoGuiaPath?: string | null;
+  estadoEntrega: string;
+  items?: InvoiceItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateInvoiceBodyPaymentMethod =
+  (typeof CreateInvoiceBodyPaymentMethod)[keyof typeof CreateInvoiceBodyPaymentMethod];
+
+export const CreateInvoiceBodyPaymentMethod = {
+  efectivo: "efectivo",
+  tarjeta: "tarjeta",
+  transferencia: "transferencia",
+  cheque: "cheque",
+} as const;
+
+export type CreateInvoiceItemBodyProductType =
+  (typeof CreateInvoiceItemBodyProductType)[keyof typeof CreateInvoiceItemBodyProductType];
+
+export const CreateInvoiceItemBodyProductType = {
+  perfumeria: "perfumeria",
+  sublimacion: "sublimacion",
+  combo: "combo",
+} as const;
+
+export interface CreateInvoiceItemBody {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  productId?: number;
+  productType?: CreateInvoiceItemBodyProductType;
+}
+
+export interface CreateInvoiceBody {
+  clientId?: number;
+  clientName: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientDepartment?: string;
+  discount?: number;
+  tax?: number;
+  notes?: string;
+  clientRtn?: string;
+  paymentMethod?: CreateInvoiceBodyPaymentMethod;
+  transferReference?: string;
+  issueDate: string;
+  dueDate?: string;
+  numeroGuia?: string;
+  transportista?: string;
+  fotoGuiaPath?: string;
+  estadoEntrega?: string;
+  baseCost?: number;
+  internalExpenses?: number;
+  internalExpensesNote?: string;
+  taxes?: number;
+  partnerPayout?: number;
+  ownerPayout?: number;
+  items: CreateInvoiceItemBody[];
+}
+
+export type UpdateInvoiceBodyStatus =
+  (typeof UpdateInvoiceBodyStatus)[keyof typeof UpdateInvoiceBodyStatus];
+
+export const UpdateInvoiceBodyStatus = {
+  pendiente: "pendiente",
+  pagada: "pagada",
+  cancelada: "cancelada",
+} as const;
+
+export type UpdateInvoiceBodyPaymentMethod =
+  (typeof UpdateInvoiceBodyPaymentMethod)[keyof typeof UpdateInvoiceBodyPaymentMethod];
+
+export const UpdateInvoiceBodyPaymentMethod = {
+  efectivo: "efectivo",
+  tarjeta: "tarjeta",
+  transferencia: "transferencia",
+  cheque: "cheque",
+} as const;
+
+export interface UpdateInvoiceBody {
+  status?: UpdateInvoiceBodyStatus;
+  clientName?: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientDepartment?: string;
+  discount?: number;
+  tax?: number;
+  notes?: string;
+  clientRtn?: string;
+  paymentMethod?: UpdateInvoiceBodyPaymentMethod;
+  transferReference?: string;
+  issueDate?: string;
+  dueDate?: string;
+  numeroGuia?: string;
+  transportista?: string;
+  fotoGuiaPath?: string;
+  estadoEntrega?: string;
+  baseCost?: number;
+  internalExpenses?: number;
+  internalExpensesNote?: string;
+  taxes?: number;
+  partnerPayout?: number;
+  ownerPayout?: number;
+  items?: CreateInvoiceItemBody[];
+}
+
 export type GetSalesChartParams = {
   year?: number;
 };
@@ -325,4 +502,14 @@ export type GetMonthlyGoalParams = {
 export type GetMonthlyReportParams = {
   month: number;
   year: number;
+};
+
+export type ListInvoicesParams = {
+  clientId?: number;
+};
+
+export type UploadInvoiceGuiaBody = {
+  foto?: Blob;
+  numeroGuia?: string;
+  transportista?: string;
 };

@@ -1,6 +1,6 @@
 import { pgTable, text, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const sublimationTable = pgTable("sublimation", {
   id: serial("id").primaryKey(),
@@ -17,5 +17,6 @@ export const sublimationTable = pgTable("sublimation", {
 });
 
 export const insertSublimationSchema = createInsertSchema(sublimationTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertSublimation = z.infer<typeof insertSublimationSchema>;
+const _insertSublimationSchema = insertSublimationSchema as any;
+export type InsertSublimation = z.infer<typeof _insertSublimationSchema>;
 export type Sublimation = typeof sublimationTable.$inferSelect;

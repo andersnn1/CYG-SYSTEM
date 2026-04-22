@@ -1020,6 +1020,9 @@ export default function Facturas() {
         notes: full.notes ?? "",
         issueDate: full.issueDate,
         dueDate: full.dueDate ?? "",
+        numeroGuia: full.numeroGuia ?? "",
+        transportista: full.transportista ?? "",
+        estadoEntrega: full.estadoEntrega ?? "Pendiente",
         items: full.items?.map(it => ({
           description: it.description,
           quantity: it.quantity,

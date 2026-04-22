@@ -1,6 +1,6 @@
 import { pgTable, text, serial, integer, numeric, timestamp, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
@@ -50,9 +50,11 @@ export const invoiceItemsTable = pgTable("invoice_items", {
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+const _insertInvoiceSchema = insertInvoiceSchema as any;
+export type InsertInvoice = z.infer<typeof _insertInvoiceSchema>;
 export type Invoice = typeof invoicesTable.$inferSelect;
 
 export const insertInvoiceItemSchema = createInsertSchema(invoiceItemsTable).omit({ id: true });
-export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
+const _insertInvoiceItemSchema = insertInvoiceItemSchema as any;
+export type InsertInvoiceItem = z.infer<typeof _insertInvoiceItemSchema>;
 export type InvoiceItem = typeof invoiceItemsTable.$inferSelect;

@@ -24,9 +24,11 @@ export const comboItemsTable = pgTable("combo_items", {
 });
 
 export const insertComboSchema = createInsertSchema(combosTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertCombo = z.infer<typeof insertComboSchema>;
+const _insertComboSchema = insertComboSchema as any;
+export type InsertCombo = z.infer<typeof _insertComboSchema>;
 export type Combo = typeof combosTable.$inferSelect;
 
 export const insertComboItemSchema = createInsertSchema(comboItemsTable).omit({ id: true });
-export type InsertComboItem = z.infer<typeof insertComboItemSchema>;
+const _insertComboItemSchema = insertComboItemSchema as any;
+export type InsertComboItem = z.infer<typeof _insertComboItemSchema>;
 export type ComboItem = typeof comboItemsTable.$inferSelect;

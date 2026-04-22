@@ -73,6 +73,7 @@ export const ListPerfumeryResponseItem = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -89,6 +90,7 @@ export const CreatePerfumeryItemBody = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
 });
 
 /**
@@ -107,6 +109,7 @@ export const GetPerfumeryItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -126,6 +129,7 @@ export const UpdatePerfumeryItemBody = zod.object({
   costPrice: zod.number().optional(),
   salePrice: zod.number().optional(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
 });
 
 export const UpdatePerfumeryItemResponse = zod.object({
@@ -137,6 +141,7 @@ export const UpdatePerfumeryItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -160,6 +165,7 @@ export const ListSublimationItemsResponseItem = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -178,6 +184,7 @@ export const CreateSublimationItemBody = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
 });
 
 /**
@@ -196,6 +203,7 @@ export const GetSublimationItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -215,6 +223,7 @@ export const UpdateSublimationItemBody = zod.object({
   costPrice: zod.number().optional(),
   salePrice: zod.number().optional(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
 });
 
 export const UpdateSublimationItemResponse = zod.object({
@@ -226,6 +235,7 @@ export const UpdateSublimationItemResponse = zod.object({
   costPrice: zod.number(),
   salePrice: zod.number(),
   description: zod.string().nullish(),
+  code: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -549,4 +559,295 @@ export const GetMonthlyReportResponse = zod.object({
       totalRevenue: zod.number(),
     }),
   ),
+});
+
+/**
+ * @summary List all invoices
+ */
+export const ListInvoicesQueryParams = zod.object({
+  clientId: zod.coerce.number().optional(),
+});
+
+export const ListInvoicesResponseItem = zod.object({
+  id: zod.number(),
+  invoiceNumber: zod.string(),
+  clientId: zod.number().nullish(),
+  clientName: zod.string(),
+  clientPhone: zod.string().nullish(),
+  clientEmail: zod.string().nullish(),
+  clientAddress: zod.string().nullish(),
+  clientCity: zod.string().nullish(),
+  clientDepartment: zod.string().nullish(),
+  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  subtotal: zod.number(),
+  discount: zod.number(),
+  tax: zod.number(),
+  total: zod.number(),
+  notes: zod.string().nullish(),
+  clientRtn: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  transferReference: zod.string().nullish(),
+  issueDate: zod.string(),
+  dueDate: zod.string().nullish(),
+  numeroGuia: zod.string().nullish(),
+  transportista: zod.string().nullish(),
+  fotoGuiaPath: zod.string().nullish(),
+  estadoEntrega: zod.string(),
+  items: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
+
+/**
+ * @summary Create an invoice
+ */
+export const CreateInvoiceBody = zod.object({
+  clientId: zod.number().optional(),
+  clientName: zod.string(),
+  clientPhone: zod.string().optional(),
+  clientEmail: zod.string().optional(),
+  clientAddress: zod.string().optional(),
+  clientCity: zod.string().optional(),
+  clientDepartment: zod.string().optional(),
+  discount: zod.number().optional(),
+  tax: zod.number().optional(),
+  notes: zod.string().optional(),
+  clientRtn: zod.string().optional(),
+  paymentMethod: zod
+    .enum(["efectivo", "tarjeta", "transferencia", "cheque"])
+    .optional(),
+  transferReference: zod.string().optional(),
+  issueDate: zod.string(),
+  dueDate: zod.string().optional(),
+  numeroGuia: zod.string().optional(),
+  transportista: zod.string().optional(),
+  fotoGuiaPath: zod.string().optional(),
+  estadoEntrega: zod.string().optional(),
+  baseCost: zod.number().optional(),
+  internalExpenses: zod.number().optional(),
+  internalExpensesNote: zod.string().optional(),
+  taxes: zod.number().optional(),
+  partnerPayout: zod.number().optional(),
+  ownerPayout: zod.number().optional(),
+  items: zod.array(
+    zod.object({
+      description: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+      productId: zod.number().optional(),
+      productType: zod.enum(["perfumeria", "sublimacion", "combo"]).optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get an invoice by id
+ */
+export const GetInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetInvoiceResponse = zod.object({
+  id: zod.number(),
+  invoiceNumber: zod.string(),
+  clientId: zod.number().nullish(),
+  clientName: zod.string(),
+  clientPhone: zod.string().nullish(),
+  clientEmail: zod.string().nullish(),
+  clientAddress: zod.string().nullish(),
+  clientCity: zod.string().nullish(),
+  clientDepartment: zod.string().nullish(),
+  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  subtotal: zod.number(),
+  discount: zod.number(),
+  tax: zod.number(),
+  total: zod.number(),
+  notes: zod.string().nullish(),
+  clientRtn: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  transferReference: zod.string().nullish(),
+  issueDate: zod.string(),
+  dueDate: zod.string().nullish(),
+  numeroGuia: zod.string().nullish(),
+  transportista: zod.string().nullish(),
+  fotoGuiaPath: zod.string().nullish(),
+  estadoEntrega: zod.string(),
+  items: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update an invoice
+ */
+export const UpdateInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateInvoiceBody = zod.object({
+  status: zod.enum(["pendiente", "pagada", "cancelada"]).optional(),
+  clientName: zod.string().optional(),
+  clientPhone: zod.string().optional(),
+  clientEmail: zod.string().optional(),
+  clientAddress: zod.string().optional(),
+  clientCity: zod.string().optional(),
+  clientDepartment: zod.string().optional(),
+  discount: zod.number().optional(),
+  tax: zod.number().optional(),
+  notes: zod.string().optional(),
+  clientRtn: zod.string().optional(),
+  paymentMethod: zod
+    .enum(["efectivo", "tarjeta", "transferencia", "cheque"])
+    .optional(),
+  transferReference: zod.string().optional(),
+  issueDate: zod.string().optional(),
+  dueDate: zod.string().optional(),
+  numeroGuia: zod.string().optional(),
+  transportista: zod.string().optional(),
+  fotoGuiaPath: zod.string().optional(),
+  estadoEntrega: zod.string().optional(),
+  baseCost: zod.number().optional(),
+  internalExpenses: zod.number().optional(),
+  internalExpensesNote: zod.string().optional(),
+  taxes: zod.number().optional(),
+  partnerPayout: zod.number().optional(),
+  ownerPayout: zod.number().optional(),
+  items: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        productId: zod.number().optional(),
+        productType: zod
+          .enum(["perfumeria", "sublimacion", "combo"])
+          .optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const UpdateInvoiceResponse = zod.object({
+  id: zod.number(),
+  invoiceNumber: zod.string(),
+  clientId: zod.number().nullish(),
+  clientName: zod.string(),
+  clientPhone: zod.string().nullish(),
+  clientEmail: zod.string().nullish(),
+  clientAddress: zod.string().nullish(),
+  clientCity: zod.string().nullish(),
+  clientDepartment: zod.string().nullish(),
+  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  subtotal: zod.number(),
+  discount: zod.number(),
+  tax: zod.number(),
+  total: zod.number(),
+  notes: zod.string().nullish(),
+  clientRtn: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  transferReference: zod.string().nullish(),
+  issueDate: zod.string(),
+  dueDate: zod.string().nullish(),
+  numeroGuia: zod.string().nullish(),
+  transportista: zod.string().nullish(),
+  fotoGuiaPath: zod.string().nullish(),
+  estadoEntrega: zod.string(),
+  items: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete an invoice
+ */
+export const DeleteInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Upload guide evidence for an invoice
+ */
+export const UploadInvoiceGuiaParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UploadInvoiceGuiaBody = zod.object({
+  foto: zod.instanceof(File).optional(),
+  numeroGuia: zod.string().optional(),
+  transportista: zod.string().optional(),
+});
+
+export const UploadInvoiceGuiaResponse = zod.object({
+  id: zod.number(),
+  invoiceNumber: zod.string(),
+  clientId: zod.number().nullish(),
+  clientName: zod.string(),
+  clientPhone: zod.string().nullish(),
+  clientEmail: zod.string().nullish(),
+  clientAddress: zod.string().nullish(),
+  clientCity: zod.string().nullish(),
+  clientDepartment: zod.string().nullish(),
+  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  subtotal: zod.number(),
+  discount: zod.number(),
+  tax: zod.number(),
+  total: zod.number(),
+  notes: zod.string().nullish(),
+  clientRtn: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  transferReference: zod.string().nullish(),
+  issueDate: zod.string(),
+  dueDate: zod.string().nullish(),
+  numeroGuia: zod.string().nullish(),
+  transportista: zod.string().nullish(),
+  fotoGuiaPath: zod.string().nullish(),
+  estadoEntrega: zod.string(),
+  items: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
 });
