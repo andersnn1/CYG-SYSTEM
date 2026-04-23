@@ -932,11 +932,11 @@ export default function Facturas() {
       switch (e.key) {
         case "F2":
           e.preventDefault();
-          // Focus the search input of the LAST item row
+          // Focus the code input of the LAST item row primarily
           const lastIdx = form.items.length - 1;
-          const searchInput = document.getElementById(`product-search-input-${lastIdx}`);
           const codeInput = document.getElementById(`product-code-input-${lastIdx}`);
-          (searchInput || codeInput)?.focus();
+          const searchInput = document.getElementById(`product-search-input-${lastIdx}`);
+          (codeInput || searchInput)?.focus();
           break;
         case "F4":
           e.preventDefault();
@@ -1126,7 +1126,11 @@ export default function Facturas() {
       return { ...f, items };
     });
     setItemDropOpen(s => ({ ...s, [itemIndex]: false }));
-    setItemSearch(s => ({ ...s, [itemIndex]: "" }));
+    setItemSearch(s => {
+      const next = { ...s };
+      delete next[itemIndex];
+      return next;
+    });
     
     // Auto focus the next row's code input
     setTimeout(() => {
@@ -1801,49 +1805,57 @@ export default function Facturas() {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // FORM VIEW
+    // ─────────────────────────────────────────────────────────────────────────────
+  // FORM VIEW (DOCUMENT STYLE)
   // ─────────────────────────────────────────────────────────────────────────────
   const currentStatus = editingInvoice?.status ?? "pendiente";
 
   return (
-    <div className="animate-in fade-in duration-200 space-y-6 pb-16">
-      {/* ── Form header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Left: back + title */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground hover:text-foreground"
-            onClick={() => { setView("list"); setEditingId(null); setForm(defaultForm()); }}
-          >
-            <ArrowLeft className="h-4 w-4" /> Facturas
-          </Button>
-          <Separator orientation="vertical" className="h-5" />
-          <span className="font-bold text-foreground text-lg">
-            {editingId ? (editingInvoice?.invoiceNumber ?? "Editar Factura") : "Nueva Factura"}
-          </span>
+    <div className="animate-in fade-in duration-200 pb-24">
+      {/* ── Top Action Bar ── */}
+      <div className="max-w-5xl mx-auto flex items-center justify-between mb-4 px-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+          onClick={() => { setView("list"); setEditingId(null); setForm(defaultForm()); }}
+        >
+          <ArrowLeft className="h-4 w-4" /> Volver a Facturas
+        </Button>
+        
+        <div className="flex items-center gap-2">
           {editingId && editingInvoice && (
             <StatusBadge status={editingInvoice.status} />
           )}
-        </div>
+          
+          {editingId && editingInvoice && (
+             <>
+               <Button variant="outline" size="sm" className="text-green-600 h-8 gap-1.5" onClick={() => handleWhatsApp(editingInvoice)}>
+                 <MessageCircle className="h-4 w-4" /> WhatsApp
+               </Button>
+               <Button variant="outline" size="sm" className="text-blue-600 h-8 gap-1.5" onClick={() => openPrint(editingInvoice)}>
+                 <Printer className="h-4 w-4" /> Imprimir
+               </Button>
+               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-red-600 hover:bg-red-50 h-8 w-8" onClick={() => { setDeleteId(editingId); setDeleteOpen(true); }}>
+                 <Trash2 className="h-4 w-4" />
+               </Button>
+               <div className="w-px h-5 bg-border mx-1"></div>
+             </>
+          )}
 
-        {/* Right: actions */}
-        <div className="flex items-center gap-2">
           <Button
             id="btn-save-invoice"
             variant="outline"
-            className="font-semibold"
+            className="font-semibold h-8"
             onClick={handleSubmit}
             disabled={submitting}
           >
             {submitting ? "Guardando..." : "Guardar [F4]"}
           </Button>
 
-          {editingId && editingInvoice && currentStatus !== "pagada" && (
+          {editingId && editingInvoice && currentStatus !== "pagada" && currentStatus !== "cancelada" && (
             <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold h-8"
               onClick={() => handleConfirm(editingId)}
             >
               <CheckCircle className="h-4 w-4 mr-1.5" /> Confirmar
@@ -1854,81 +1866,57 @@ export default function Facturas() {
             <Button
               id="btn-cancel-invoice"
               variant="outline"
-              className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 font-semibold"
+              className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 font-semibold h-8"
               onClick={() => handleCancel(editingId)}
             >
-              <XCircle className="h-4 w-4 mr-1.5" /> Cancelar [F8]
-            </Button>
-          )}
-
-          {editingId && editingInvoice && (
-            <Button
-              variant="outline"
-              className="gap-1.5 font-semibold text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-900/20"
-              onClick={() => handleWhatsApp(editingInvoice)}
-              title="Enviar por WhatsApp"
-            >
-              <MessageCircle className="h-4 w-4" /> WhatsApp
-            </Button>
-          )}
-
-          {editingId && editingInvoice && (
-            <Button
-              variant="outline"
-              className="gap-1.5 font-semibold text-blue-600 border-blue-300 hover:bg-blue-50"
-              onClick={() => openPrint(editingInvoice)}
-              title="Imprimir / Exportar PDF"
-            >
-              <Printer className="h-4 w-4" /> PDF
-            </Button>
-          )}
-
-          {editingId && editingInvoice && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-red-600 hover:bg-red-50"
-              onClick={() => { setDeleteId(editingId); setDeleteOpen(true); }}
-              title="Eliminar factura"
-            >
-              <Trash2 className="h-4 w-4" />
+              <XCircle className="h-4 w-4 mr-1.5" /> Anular [F8]
             </Button>
           )}
         </div>
       </div>
 
-      {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ─── Left column (2/3) ─── */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Section: Información del Cliente */}
-          <section className="bg-card rounded-xl border p-5 space-y-4">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">
-              Información del Cliente
-            </h2>
-
-            {/* Client search */}
-            <div className="relative" ref={clientRef}>
-              <Label className="text-xs text-muted-foreground font-medium">Buscar cliente existente</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="client-search-input"
-                  className="pl-9 bg-background"
-                  placeholder="Nombre del cliente..."
-                  value={clientSearch}
-                  onChange={e => {
-                    setClientSearch(e.target.value);
-                    setClientDropOpen(true);
-                    setForm(f => ({ ...f, clientName: e.target.value, clientId: "" }));
-                  }}
-                  onFocus={() => setClientDropOpen(true)}
-                  onBlur={() => setTimeout(() => setClientDropOpen(false), 150)}
-                />
-              </div>
+      {/* ── Document Paper ── */}
+      <div className="max-w-5xl mx-auto bg-card border shadow-sm rounded-sm overflow-hidden">
+        
+        {/* Document Header */}
+        <div className="p-8 pb-4 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+          
+          {/* Left: Client Info */}
+          <div>
+            <h1 className="text-3xl font-black text-foreground tracking-tight mb-6">
+              {editingId ? (editingInvoice?.invoiceNumber ?? "Factura") : "NUEVA FACTURA"}
+            </h1>
+            
+            <div className="space-y-1 relative" ref={clientRef}>
+              <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cliente [F7]</Label>
+              
+              <Input
+                id="client-search-input"
+                className="h-9 border-transparent hover:border-input focus:border-ring bg-transparent font-semibold text-lg px-1 rounded-sm shadow-none focus-visible:ring-1"
+                placeholder="Escriba el nombre del cliente..."
+                value={clientSearch}
+                onChange={e => {
+                  setClientSearch(e.target.value);
+                  setClientDropOpen(true);
+                  setForm(f => ({ ...f, clientName: e.target.value, clientId: "" }));
+                }}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && clientDropOpen && clientSearch.trim()) {
+                    e.preventDefault();
+                    const matches = (Array.isArray(clients) ? clients : []).filter((c: Client) => 
+                      c.name.toLowerCase().includes(clientSearch.toLowerCase())
+                    );
+                    if (matches.length > 0) {
+                      selectClient(matches[0]);
+                    }
+                  }
+                }}
+                onFocus={() => setClientDropOpen(true)}
+                onBlur={() => setTimeout(() => setClientDropOpen(false), 200)}
+              />
+              
               {clientDropOpen && clientSearch.trim().length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-card border rounded-xl shadow-xl max-h-52 overflow-y-auto">
                   {(Array.isArray(clients) ? clients : [])
                     .filter((c: Client) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
                     .slice(0, 8)
@@ -1940,409 +1928,56 @@ export default function Facturas() {
                         onMouseDown={() => selectClient(c)}
                       >
                         <span className="font-medium text-foreground">{c.name}</span>
-                        {c.phone && (
-                          <span className="text-muted-foreground ml-2 text-xs">{c.phone}</span>
-                        )}
+                        {c.phone && <span className="text-muted-foreground ml-2 text-xs">{c.phone}</span>}
                       </button>
                     ))}
-                  {(clients ?? []).filter((c: Client) => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
-                    <p className="px-4 py-3 text-sm text-muted-foreground text-center">Sin coincidencias</p>
-                  )}
                 </div>
               )}
-            </div>
 
-            {/* Name */}
-            <div>
-              <Label className="text-xs text-muted-foreground font-medium">Nombre *</Label>
-              <Input
-                className="mt-1 bg-background"
-                value={form.clientName}
-                onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))}
-                placeholder="Nombre completo o empresa"
-              />
-            </div>
-
-            {/* Phone */}
-            <div>
-              <Label className="text-xs text-muted-foreground font-medium">Teléfono</Label>
-              <Input
-                className="mt-1 bg-background"
-                value={form.clientPhone}
-                onChange={e => setForm(f => ({ ...f, clientPhone: e.target.value }))}
-                placeholder="+504..."
-              />
-            </div>
-
-            {/* RTN */}
-            <div>
-              <Label className="text-xs text-muted-foreground font-medium">RTN</Label>
-              <Input
-                className="mt-1 bg-background"
-                value={form.clientRtn}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 14);
-                  setForm(f => ({ ...f, clientRtn: val }));
-                }}
-                placeholder="00000000000000"
-                maxLength={14}
-                inputMode="numeric"
-              />
-            </div>
-
-            {/* Collapsible address */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAddress(v => !v)}
-                className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                {showAddress
-                  ? <><ChevronUp className="h-3.5 w-3.5" /> Ocultar dirección</>
-                  : <><ChevronDown className="h-3.5 w-3.5" /> + Agregar dirección</>
-                }
-              </button>
-              {showAddress && (
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground font-medium">Ciudad</Label>
-                    <Input
-                      className="mt-1 bg-background"
-                      value={form.clientCity}
-                      onChange={e => setForm(f => ({ ...f, clientCity: e.target.value }))}
-                      placeholder="San Pedro Sula"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground font-medium">Departamento</Label>
-                    <Select
-                      value={form.clientDepartment}
-                      onValueChange={v => setForm(f => ({ ...f, clientDepartment: v }))}
-                    >
-                      <SelectTrigger className="mt-1 bg-background">
-                        <SelectValue placeholder="Seleccionar..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs text-muted-foreground font-medium">Dirección</Label>
-                    <Input
-                      className="mt-1 bg-background"
-                      value={form.clientAddress}
-                      onChange={e => setForm(f => ({ ...f, clientAddress: e.target.value }))}
-                      placeholder="Dirección completa"
-                    />
-                  </div>
+              {/* Client Meta (RTN, Phone, Address) - only show if clientName is not empty to keep it clean */}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                   <Input 
+                     className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent text-sm px-1 shadow-none text-muted-foreground" 
+                     placeholder="RTN" 
+                     value={form.clientRtn} 
+                     onChange={e => setForm(f => ({ ...f, clientRtn: e.target.value.replace(/\D/g,"").slice(0,14) }))} 
+                   />
                 </div>
-              )}
-            </div>
-          </section>
-
-          {/* ── Products table (Moving up as requested: "Papel de Facturas") ── */}
-          <section className="bg-card rounded-xl border overflow-hidden">
-            <div className="px-5 py-4 border-b flex items-center justify-between">
-              <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Productos / Servicios</h2>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-8">#</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Descripción / Inventario</th>
-                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground w-24">Cant.</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-32">Precio Unit.</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground w-28">Total</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.map((item, i) => (
-                    <tr key={i} className="border-b last:border-b-0 align-top">
-                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs pt-4">{i + 1}</td>
-                      <td className="px-4 py-3 min-w-[280px]">
-                        <div className="relative mb-2">
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex flex-col shrink-0">
-                              <Input
-                                id={`product-code-input-${i}`}
-                                type="text"
-                                className="bg-background h-8 text-sm text-center w-24 shrink-0"
-                                placeholder="Código"
-                                onKeyDown={e => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    handleCodeSearch(i, (e.currentTarget.value ?? "").trim());
-                                  }
-                                }}
-                              />
-                              {codeError[i] && (
-                                <span className="text-xs text-red-500 font-medium mt-0.5 text-center">No encontrado</span>
-                              )}
-                            </div>
-                            <div className="relative flex-1">
-                              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                              <Input
-                                id={`product-search-input-${i}`}
-                                className="pl-8 pr-7 bg-background h-8 text-sm"
-                                placeholder="Buscar producto..."
-                                value={itemSearch[i] ?? ""}
-                                onChange={e => {
-                                  setItemSearch(s => ({ ...s, [i]: e.target.value }));
-                                  setItemDropOpen(s => ({ ...s, [i]: true }));
-                                }}
-                                onFocus={() => setItemDropOpen(s => ({ ...s, [i]: true }))}
-                                onBlur={() => setTimeout(() => setItemDropOpen(s => ({ ...s, [i]: false })), 150)}
-                              />
-                              {(itemSearch[i] || item.productId) && (
-                                <button
-                                  type="button"
-                                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                                  onClick={() => {
-                                    setItemSearch(s => ({ ...s, [i]: "" }));
-                                    setForm(f => {
-                                      const items = [...f.items];
-                                      items[i] = { ...items[i], productId: undefined, productType: undefined };
-                                      return { ...f, items };
-                                    });
-                                  }}
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {itemDropOpen[i] && (itemSearch[i] ?? "").length > 0 && (
-                            <div className="absolute z-50 left-[72px] right-0 mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                              {products
-                                .filter(p => p.label.toLowerCase().includes((itemSearch[i] ?? "").toLowerCase()))
-                                .slice(0, 12)
-                                .map(p => (
-                                  <button
-                                    key={`${p.type}-${p.id}`}
-                                    type="button"
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2 first:rounded-t-xl last:rounded-b-xl"
-                                    onMouseDown={() => selectProduct(i, p)}
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span className={`text-xs px-1.5 py-0.5 rounded font-semibold shrink-0 ${p.type === "perfumeria" ? "bg-purple-100 text-purple-700" : "bg-cyan-100 text-cyan-700"}`}>
-                                        {p.type === "perfumeria" ? "Perf." : "Sub."}
-                                      </span>
-                                      <span className="truncate text-foreground font-medium">{p.label}</span>
-                                    </div>
-                                    <span className="text-xs font-bold text-foreground shrink-0">{formatCurrency(p.price)}</span>
-                                  </button>
-                                ))}
-                            </div>
-                          )}
-                        </div>
-                        <Input
-                          className="bg-background h-8 text-sm"
-                          value={item.description}
-                          onChange={e => updateItem(i, "description", e.target.value)}
-                          placeholder="Descripción del ítem *"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Input
-                          type="number"
-                          min={1}
-                          className="bg-background h-8 text-sm text-center w-full"
-                          value={item.quantity}
-                          onChange={e => updateItem(i, "quantity", Number(e.target.value))}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="bg-background h-8 text-sm text-right w-full"
-                          value={item.unitPrice}
-                          onChange={e => updateItem(i, "unitPrice", Number(e.target.value))}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-foreground pt-4">
-                        {formatCurrency(item.quantity * item.unitPrice)}
-                      </td>
-                      <td className="px-2 py-3 pt-3">
-                        <button
-                          type="button"
-                          disabled={form.items.length === 1}
-                          onClick={() => removeItem(i)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-5 py-3 border-t">
-              <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-blue-600 font-semibold" onClick={addItem}>
-                <Plus className="h-4 w-4" /> Agregar línea
-              </Button>
-            </div>
-          </section>
-
-          {/* ── Panel Interno (Restaurado a versión completa) ── */}
-          <section className="print-hide bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800 p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-base">🔒</span>
-              <h2 className="font-bold text-amber-900 dark:text-amber-200 text-sm uppercase tracking-wide">
-                Panel Interno — Utilidad Real (Escenario B)
-              </h2>
-              <span className="ml-auto text-[10px] text-amber-600 italic">No visible en impresión</span>
-            </div>
-
-            {/* Métricas calculadas automáticamente */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {[
-                { label: "Ingresos Totales", value: totalRevenue, color: "text-emerald-700 dark:text-emerald-400" },
-                { label: "Costo Base", value: totalBaseCost, color: "text-red-600 dark:text-red-400" },
-                { label: "Utilidad Bruta", value: grossProfit, color: "text-blue-700 dark:text-blue-400" },
-                { label: "Pago al Socio (50%)", value: partnerPayout, color: "text-purple-700 dark:text-purple-400" },
-                { label: "Mi Bruto (50%)", value: ownerGross, color: "text-indigo-700 dark:text-indigo-400" },
-                { label: "Mi Utilidad Real", value: ownerRealIncome, color: ownerRealIncome >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400" },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="bg-white dark:bg-amber-900/40 rounded-lg p-2.5 border border-amber-200 dark:border-amber-800 shadow-sm">
-                  <div className="text-[10px] text-amber-800 dark:text-amber-200 font-bold mb-0.5 uppercase tracking-tighter">{label}</div>
-                  <div className={`text-sm font-black ${color}`}>{formatCurrency(value)}</div>
+                <div>
+                   <Input 
+                     className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent text-sm px-1 shadow-none text-muted-foreground" 
+                     placeholder="Teléfono" 
+                     value={form.clientPhone} 
+                     onChange={e => setForm(f => ({ ...f, clientPhone: e.target.value }))} 
+                   />
                 </div>
-              ))}
-            </div>
-
-            {/* Inputs del dueño */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs text-amber-900 dark:text-amber-200 font-bold uppercase tracking-tight">Gastos Operativos (L)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium"
-                    placeholder="0.00"
-                    value={internalExpenses || ""}
-                    onChange={e => setInternalExpenses(Number(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-amber-900 dark:text-amber-200 font-bold uppercase tracking-tight">Nota de Gastos</Label>
-                  <Input
-                    type="text"
-                    className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium"
-                    placeholder="Ej. Envío Forza..."
-                    value={internalExpensesNote}
-                    onChange={e => setInternalExpensesNote(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs text-amber-900 dark:text-amber-200 font-bold uppercase tracking-tight">Reserva para Impuestos</Label>
-                <div className="flex gap-2">
-                  <div className="flex bg-background border border-amber-300 dark:border-amber-700 rounded-md p-1 h-9 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setTaxMode("manual")}
-                      className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${taxMode === "manual" ? "bg-amber-600 text-white shadow-sm" : "text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/50"}`}
-                    >
-                      LPS
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTaxMode("percent")}
-                      className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${taxMode === "percent" ? "bg-amber-600 text-white shadow-sm" : "text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/50"}`}
-                    >
-                      %
-                    </button>
-                  </div>
-                  {taxMode === "manual" ? (
-                    <Input
-                      type="number"
-                      className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium"
-                      placeholder="0.00"
-                      value={profitTaxes || ""}
-                      onChange={e => setProfitTaxes(Number(e.target.value) || 0)}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2 flex-1">
-                      <Input
-                        type="number"
-                        className="bg-background h-9 border-amber-300 dark:border-amber-700 text-foreground font-medium w-24"
-                        placeholder="%"
-                        value={taxPercent || ""}
-                        onChange={e => setTaxPercent(Number(e.target.value) || 0)}
-                      />
-                      <span className="text-xs text-amber-600 dark:text-amber-400 font-bold">= {formatCurrency(computedTaxes)}</span>
-                    </div>
-                  )}
+                <div className="col-span-2">
+                   <Input 
+                     className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent text-sm px-1 shadow-none text-muted-foreground" 
+                     placeholder="Dirección completa" 
+                     value={form.clientAddress} 
+                     onChange={e => setForm(f => ({ ...f, clientAddress: e.target.value }))} 
+                   />
                 </div>
               </div>
             </div>
-          </section>
+          </div>
 
-          {/* Section: Logística (New) */}
-          <section className="bg-card rounded-xl border p-5 space-y-4">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Logística y Entrega</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground font-medium">Transportista</Label>
-                <Select value={form.transportista} onValueChange={v => setForm(f => ({ ...f, transportista: v }))}>
-                  <SelectTrigger className="h-9 bg-background">
-                    <SelectValue placeholder="Seleccionar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Forza">Forza Delivery</SelectItem>
-                    <SelectItem value="CAEX">CAEX Logistics</SelectItem>
-                    <SelectItem value="C807">C807</SelectItem>
-                    <SelectItem value="Recogida">Recogida en Tienda</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground font-medium">Estado Entrega</Label>
-                <Select value={form.estadoEntrega} onValueChange={v => setForm(f => ({ ...f, estadoEntrega: v }))}>
-                  <SelectTrigger className="h-9 bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Pendiente">Pendiente</SelectItem>
-                    <SelectItem value="En Tránsito">En Tránsito</SelectItem>
-                    <SelectItem value="Entregado">Entregado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs text-muted-foreground font-medium">Número de Guía</Label>
-                <Input
-                  className="h-9 bg-background"
-                  value={form.numeroGuia}
-                  onChange={e => setForm(f => ({ ...f, numeroGuia: e.target.value }))}
-                  placeholder="Ej. FOR-123456"
-                />
-              </div>
+          {/* Right: Invoice Meta */}
+          <div className="flex flex-col md:items-end space-y-1 md:pt-14">
+            <div className="flex items-center gap-3 w-full md:w-64">
+              <Label className="text-xs font-semibold text-muted-foreground w-24 md:text-right">Emisión</Label>
+              <Input type="date" className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent font-medium px-1 shadow-none" value={form.issueDate} onChange={e => setForm(f => ({...f, issueDate: e.target.value}))} />
             </div>
-          </section>
-
-          {/* Section: Detalles de Pago */}
-          <section className="bg-card rounded-xl border p-5 space-y-4">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">
-              Detalles de Pago
-            </h2>
-            <div>
-              <Label className="text-xs text-muted-foreground font-medium">Método de pago</Label>
-              <Select
-                value={form.paymentMethod}
-                onValueChange={v => setForm(f => ({ ...f, paymentMethod: v as InvoiceForm["paymentMethod"] }))}
-              >
-                <SelectTrigger className="mt-1 bg-background">
+            <div className="flex items-center gap-3 w-full md:w-64">
+              <Label className="text-xs font-semibold text-muted-foreground w-24 md:text-right">Vencimiento</Label>
+              <Input type="date" className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent font-medium px-1 shadow-none" value={form.dueDate} onChange={e => setForm(f => ({...f, dueDate: e.target.value}))} />
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-64">
+              <Label className="text-xs font-semibold text-muted-foreground w-24 md:text-right">Pago</Label>
+              <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({...f, paymentMethod: v as InvoiceForm["paymentMethod"]}))}>
+                <SelectTrigger className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent px-1 shadow-none font-medium">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -2354,93 +1989,284 @@ export default function Facturas() {
               </Select>
             </div>
             {form.paymentMethod === "transferencia" && (
+               <div className="flex items-center gap-3 w-full md:w-64">
+                 <Label className="text-xs font-semibold text-muted-foreground w-24 md:text-right">Referencia</Label>
+                 <Input className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent px-1 shadow-none text-sm" placeholder="# Transf." value={form.transferReference} onChange={e => setForm(f => ({...f, transferReference: e.target.value}))} />
+               </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Table ── */}
+        <div className="mt-4 border-y border-border/50">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-b border-border/50">
+                <th className="text-left px-6 py-2 text-[10px] uppercase font-bold text-muted-foreground w-36">Código [F2]</th>
+                <th className="text-left px-2 py-2 text-[10px] uppercase font-bold text-muted-foreground">Descripción</th>
+                <th className="text-center px-2 py-2 text-[10px] uppercase font-bold text-muted-foreground w-20">Cant.</th>
+                <th className="text-right px-2 py-2 text-[10px] uppercase font-bold text-muted-foreground w-28">Precio U.</th>
+                <th className="text-right px-6 py-2 text-[10px] uppercase font-bold text-muted-foreground w-28">Total</th>
+                <th className="w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/20">
+              {form.items.map((item, i) => (
+                <tr key={i} className="group hover:bg-muted/20 transition-colors">
+                  <td className="px-6 py-1 align-top">
+                    <div className="relative">
+                      <Input
+                        id={`product-code-input-${i}`}
+                        className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent font-mono text-xs px-1 shadow-none w-full"
+                        placeholder="..."
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleCodeSearch(i, (e.currentTarget.value ?? "").trim());
+                          }
+                        }}
+                      />
+                      {codeError[i] && (
+                        <span className="absolute -bottom-4 left-0 text-[10px] text-red-500 font-medium">No encontrado</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-2 py-1 align-top relative">
+                    <div className="flex items-center group/search">
+                      <Input
+                        id={`product-search-input-${i}`}
+                        className={`h-8 border-transparent hover:border-input focus:border-ring bg-transparent px-1 shadow-none w-full ${!item.description ? 'font-light italic text-muted-foreground' : 'font-medium'}`}
+                        placeholder="Buscar producto o describir..."
+                        value={itemSearch[i] !== undefined ? itemSearch[i] : item.description}
+                        onChange={e => {
+                          if (itemSearch[i] !== undefined) {
+                            setItemSearch(s => ({ ...s, [i]: e.target.value }));
+                          } else {
+                            updateItem(i, "description", e.target.value);
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && itemDropOpen[i] && (itemSearch[i] ?? "").trim()) {
+                            e.preventDefault();
+                            const matches = products.filter(p => p.label.toLowerCase().includes((itemSearch[i] ?? "").toLowerCase()));
+                            if (matches.length > 0) {
+                              selectProduct(i, matches[0]);
+                            } else {
+                              handleCodeSearch(i, (itemSearch[i] ?? "").trim());
+                            }
+                          }
+                        }}
+                        onFocus={() => {
+                           if (itemSearch[i] === undefined) {
+                              setItemSearch(s => ({ ...s, [i]: item.description }));
+                           }
+                           setItemDropOpen(s => ({ ...s, [i]: true }));
+                        }}
+                        onBlur={() => setTimeout(() => setItemDropOpen(s => ({ ...s, [i]: false })), 200)}
+                      />
+                      {item.productId && (
+                         <button type="button" className="opacity-0 group-hover/search:opacity-100 p-1 hover:text-red-500 transition-opacity" onClick={() => {
+                           setForm(f => {
+                             const items = [...f.items];
+                             items[i] = { ...items[i], productId: undefined, productType: undefined };
+                             return { ...f, items };
+                           });
+                         }}>
+                           <X className="h-3 w-3" />
+                         </button>
+                      )}
+                    </div>
+                    {itemDropOpen[i] && (itemSearch[i] ?? "").length > 0 && (
+                      <div className="absolute z-50 left-0 right-0 mt-1 bg-card border rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                        {products
+                          .filter(p => p.label.toLowerCase().includes((itemSearch[i] ?? "").toLowerCase()))
+                          .slice(0, 12)
+                          .map(p => (
+                            <button
+                              key={`${p.type}-${p.id}`}
+                              type="button"
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-muted flex items-center justify-between first:rounded-t-xl last:rounded-b-xl"
+                              onMouseDown={() => selectProduct(i, p)}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${p.type === "perfumeria" ? "bg-purple-100 text-purple-700" : "bg-cyan-100 text-cyan-700"}`}>
+                                  {p.type === "perfumeria" ? "Perf." : "Sub."}
+                                </span>
+                                <span className="truncate font-medium">{p.label}</span>
+                              </div>
+                              <span className="text-xs font-bold shrink-0 ml-2">{formatCurrency(p.price)}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 align-top">
+                    <Input
+                      type="number" min={1}
+                      className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent text-center px-1 shadow-none"
+                      value={item.quantity || ""}
+                      onChange={e => updateItem(i, "quantity", Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="px-2 py-1 align-top">
+                    <Input
+                      type="number" min={0} step="0.01"
+                      className="h-8 border-transparent hover:border-input focus:border-ring bg-transparent text-right px-1 shadow-none"
+                      value={item.unitPrice || ""}
+                      onChange={e => updateItem(i, "unitPrice", Number(e.target.value))}
+                    />
+                  </td>
+                  <td className="px-6 py-1 align-top pt-2.5 text-right font-semibold">
+                    {formatCurrency(item.quantity * item.unitPrice)}
+                  </td>
+                  <td className="px-2 py-1 align-top pt-2">
+                    <button
+                      type="button" disabled={form.items.length === 1}
+                      onClick={() => removeItem(i)}
+                      className="text-muted-foreground/40 hover:text-red-500 transition-colors disabled:opacity-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-6 py-2">
+             <button type="button" onClick={addItem} className="text-[10px] font-bold uppercase text-blue-600 hover:text-blue-800 transition-colors">
+               + Agregar Línea
+             </button>
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+           {/* Left: Notes & Logistics */}
+           <div className="space-y-6">
               <div>
-                <Label className="text-xs text-muted-foreground font-medium">Número / Referencia de transferencia</Label>
-                <Input
-                  className="mt-1 bg-background"
-                  value={form.transferReference}
-                  onChange={e => setForm(f => ({ ...f, transferReference: e.target.value }))}
-                  placeholder="Número o referencia de la transferencia"
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Notas y Condiciones</Label>
+                <Textarea
+                  className="mt-1 border-transparent hover:border-input focus:border-ring bg-muted/20 text-sm min-h-[60px] resize-none shadow-none"
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Condiciones de pago, instrucciones especiales..."
                 />
               </div>
-            )}
-          </section>
 
-          {/* Section: Notas */}
-          <section className="bg-card rounded-xl border p-5 space-y-3">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Notas</h2>
-            <Textarea
-              className="bg-background resize-none text-sm"
-              value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Condiciones de pago, instrucciones especiales..."
-              rows={3}
-            />
-          </section>
+              {/* Logistics mini-panel */}
+              <div className="p-3 bg-muted/20 rounded border border-transparent hover:border-border transition-colors">
+                 <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Envío y Logística</Label>
+                 <div className="grid grid-cols-2 gap-2">
+                    <Select value={form.transportista} onValueChange={v => setForm(f => ({ ...f, transportista: v }))}>
+                      <SelectTrigger className="h-7 border-transparent hover:border-input focus:border-ring bg-background px-2 text-xs shadow-none">
+                        <SelectValue placeholder="Transportista" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Forza">Forza Delivery</SelectItem>
+                        <SelectItem value="CAEX">CAEX Logistics</SelectItem>
+                        <SelectItem value="C807">C807</SelectItem>
+                        <SelectItem value="Recogida">Recogida Tienda</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={form.estadoEntrega} onValueChange={v => setForm(f => ({ ...f, estadoEntrega: v }))}>
+                      <SelectTrigger className="h-7 border-transparent hover:border-input focus:border-ring bg-background px-2 text-xs shadow-none">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pendiente">Pendiente</SelectItem>
+                        <SelectItem value="En Tránsito">En Tránsito</SelectItem>
+                        <SelectItem value="Entregado">Entregado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Input
+                      className="col-span-2 h-7 border-transparent hover:border-input focus:border-ring bg-background px-2 text-xs shadow-none"
+                      value={form.numeroGuia}
+                      onChange={e => setForm(f => ({ ...f, numeroGuia: e.target.value }))}
+                      placeholder="Número de Guía (Ej. FOR-12345)"
+                    />
+                 </div>
+              </div>
+           </div>
+
+           {/* Right: Totals */}
+           <div className="space-y-1">
+             <div className="flex justify-between py-1 text-sm text-muted-foreground">
+               <span>Subtotal</span>
+               <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
+             </div>
+             <div className="flex items-center justify-between py-1 group">
+               <Label className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">Descuento</Label>
+               <Input
+                 type="number" min={0} step="0.01"
+                 className="h-7 border-transparent hover:border-input focus:border-ring bg-transparent text-right w-28 px-1 shadow-none text-sm text-red-600 font-medium"
+                 value={form.discount || ""}
+                 onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))}
+               />
+             </div>
+             <div className="flex items-center justify-between py-1 group">
+               <Label className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">Impuesto (ISV)</Label>
+               <Input
+                 type="number" min={0} step="0.01"
+                 className="h-7 border-transparent hover:border-input focus:border-ring bg-transparent text-right w-28 px-1 shadow-none text-sm font-medium"
+                 value={form.tax || ""}
+                 onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))}
+               />
+             </div>
+             <div className="flex justify-between items-center pt-3 mt-1 border-t border-border/50">
+               <span className="font-black text-lg uppercase">Total</span>
+               <span className="text-3xl font-black text-blue-600 tracking-tight">{formatCurrency(total)}</span>
+             </div>
+           </div>
         </div>
+      </div>
 
-        {/* ─── Right column (1/3) ─── */}
-        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-
-          {/* Section: Fechas */}
-          <section className="bg-card rounded-xl border p-5 space-y-4">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Fechas</h2>
-            <div>
-              <Label className="text-xs text-muted-foreground font-medium">Fecha de emisión *</Label>
-              <Input
-                type="date"
-                className="mt-1 bg-background"
-                value={form.issueDate}
-                onChange={e => setForm(f => ({ ...f, issueDate: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground font-medium">Fecha de vencimiento</Label>
-              <Input
-                type="date"
-                className="mt-1 bg-background"
-                value={form.dueDate}
-                onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-              />
-            </div>
-          </section>
-
-          {/* Section: Resumen */}
-          <section className="bg-card rounded-xl border p-5 space-y-3">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Resumen</h2>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium text-foreground">{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <Label className="text-sm text-muted-foreground shrink-0">Descuento</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                className="bg-background h-8 text-sm text-right w-28"
-                value={form.discount}
-                onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <Label className="text-sm text-muted-foreground shrink-0">ISV</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                className="bg-background h-8 text-sm text-right w-28"
-                value={form.tax}
-                onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))}
-              />
-            </div>
-            <Separator />
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-foreground">Total</span>
-              <span className="text-2xl font-black text-blue-600">{formatCurrency(total)}</span>
-            </div>
-          </section>
-        </div>
+      {/* ── Internal Profit Panel (Below the main document) ── */}
+      <div className="max-w-5xl mx-auto mt-6 print-hide">
+        <details className="group">
+           <summary className="flex items-center gap-2 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors font-medium text-sm">
+             <span className="group-open:rotate-90 transition-transform">▶</span>
+             Panel Interno (Utilidad Real & Gastos)
+           </summary>
+           <div className="mt-4 p-5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-sm">
+             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-5">
+               <div className="space-y-1"><div className="text-[10px] text-amber-800/70 dark:text-amber-200/50 font-bold uppercase">Ventas</div><div className="text-sm font-black text-emerald-600">{formatCurrency(totalRevenue)}</div></div>
+               <div className="space-y-1"><div className="text-[10px] text-amber-800/70 dark:text-amber-200/50 font-bold uppercase">Costo Base</div><div className="text-sm font-black text-red-500">{formatCurrency(totalBaseCost)}</div></div>
+               <div className="space-y-1"><div className="text-[10px] text-amber-800/70 dark:text-amber-200/50 font-bold uppercase">Ut. Bruta</div><div className="text-sm font-black text-blue-600">{formatCurrency(grossProfit)}</div></div>
+               <div className="space-y-1"><div className="text-[10px] text-amber-800/70 dark:text-amber-200/50 font-bold uppercase">Socio (50%)</div><div className="text-sm font-black text-purple-600">{formatCurrency(partnerPayout)}</div></div>
+               <div className="space-y-1"><div className="text-[10px] text-amber-800/70 dark:text-amber-200/50 font-bold uppercase">Mi Bruto</div><div className="text-sm font-black text-indigo-600">{formatCurrency(ownerGross)}</div></div>
+               <div className="space-y-1"><div className="text-[10px] text-amber-800/70 dark:text-amber-200/50 font-bold uppercase">Mi Neto</div><div className={`text-sm font-black ${ownerRealIncome >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(ownerRealIncome)}</div></div>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <Label className="text-[10px] font-bold text-amber-900/70 dark:text-amber-200/70 uppercase">Gastos Operativos (Ej. Taxi, Cajas)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input type="number" className="h-8 border-amber-200 bg-white dark:bg-black w-24" placeholder="0.00" value={internalExpenses || ""} onChange={e => setInternalExpenses(Number(e.target.value) || 0)} />
+                    <Input className="h-8 border-amber-200 bg-white dark:bg-black flex-1" placeholder="Nota de gasto..." value={internalExpensesNote} onChange={e => setInternalExpensesNote(e.target.value)} />
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-[10px] font-bold text-amber-900/70 dark:text-amber-200/70 uppercase">Reserva de Impuestos</Label>
+                  <div className="flex gap-2 mt-1 items-center">
+                    <div className="flex bg-white dark:bg-black border border-amber-200 rounded h-8 p-0.5">
+                       <button type="button" onClick={() => setTaxMode("manual")} className={`px-2 text-[10px] font-bold rounded ${taxMode === "manual" ? "bg-amber-600 text-white" : "text-amber-700"}`}>LPS</button>
+                       <button type="button" onClick={() => setTaxMode("percent")} className={`px-2 text-[10px] font-bold rounded ${taxMode === "percent" ? "bg-amber-600 text-white" : "text-amber-700"}`}>%</button>
+                    </div>
+                    {taxMode === "manual" ? (
+                      <Input type="number" className="h-8 border-amber-200 bg-white dark:bg-black w-28" placeholder="0.00" value={profitTaxes || ""} onChange={e => setProfitTaxes(Number(e.target.value) || 0)} />
+                    ) : (
+                      <>
+                        <Input type="number" className="h-8 border-amber-200 bg-white dark:bg-black w-20" placeholder="%" value={taxPercent || ""} onChange={e => setTaxPercent(Number(e.target.value) || 0)} />
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400">= {formatCurrency(computedTaxes)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+             </div>
+           </div>
+        </details>
       </div>
 
       {/* ── Delete AlertDialog ── */}
