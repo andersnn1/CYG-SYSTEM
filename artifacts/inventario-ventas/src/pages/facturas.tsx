@@ -53,6 +53,13 @@ interface Invoice {
   transportista?: string | null;
   fotoGuiaPath?: string | null;
   estadoEntrega?: string;
+  // Profit fields
+  baseCost?: number;
+  internalExpenses?: number;
+  internalExpensesNote?: string | null;
+  taxes?: number;
+  partnerPayout?: number;
+  ownerPayout?: number;
   items?: InvoiceItem[];
   createdAt: string;
   updatedAt: string;
@@ -916,6 +923,40 @@ export default function Facturas() {
     loadProducts();
   }, []);
 
+  // ── POS Keyboard Shortcuts ─────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if viewing the list
+      if (view === "list") return;
+
+      switch (e.key) {
+        case "F2":
+          e.preventDefault();
+          // Focus the search input of the LAST item row
+          const lastIdx = form.items.length - 1;
+          const searchInput = document.getElementById(`product-search-input-${lastIdx}`);
+          const codeInput = document.getElementById(`product-code-input-${lastIdx}`);
+          (searchInput || codeInput)?.focus();
+          break;
+        case "F4":
+          e.preventDefault();
+          document.getElementById("btn-save-invoice")?.click();
+          break;
+        case "F7":
+          e.preventDefault();
+          document.getElementById("client-search-input")?.focus();
+          break;
+        case "F8":
+          e.preventDefault();
+          document.getElementById("btn-cancel-invoice")?.click();
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [view, form.items.length]);
+
   // ── Load invoices ──────────────────────────────────────────────────────────
   const loadInvoices = async () => {
     try {
@@ -998,6 +1039,11 @@ export default function Facturas() {
     setClientSearch("");
     setItemSearch({});
     setItemDropOpen({});
+    // Reset internal panel
+    setInternalExpenses(0);
+    setInternalExpensesNote("");
+    setProfitTaxes(0);
+    setTaxMode("manual");
     setView("form");
   };
 
@@ -1034,6 +1080,13 @@ export default function Facturas() {
       setClientSearch(full.clientName);
       setItemSearch({});
       setItemDropOpen({});
+      
+      // Populate internal panel
+      setInternalExpenses(full.internalExpenses ?? 0);
+      setInternalExpensesNote(full.internalExpensesNote ?? "");
+      setProfitTaxes(full.taxes ?? 0);
+      setTaxMode("manual");
+
       setView("form");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -1066,10 +1119,19 @@ export default function Facturas() {
         productType: product.type,
         costPrice: product.costPrice,
       };
+      // Auto-add new row if it's the last row
+      if (itemIndex === items.length - 1) {
+        items.push({ description: "", quantity: 1, unitPrice: 0 });
+      }
       return { ...f, items };
     });
     setItemDropOpen(s => ({ ...s, [itemIndex]: false }));
     setItemSearch(s => ({ ...s, [itemIndex]: "" }));
+    
+    // Auto focus the next row's code input
+    setTimeout(() => {
+      document.getElementById(`product-code-input-${itemIndex + 1}`)?.focus();
+    }, 100);
   };
 
   const handleCodeSearch = async (itemIndex: number, inputValue: string) => {
@@ -1101,11 +1163,20 @@ export default function Facturas() {
             productId: combo.id,
             productType: "combo",
           };
+          // Auto-add new row if it's the last row
+          if (itemIndex === items.length - 1) {
+            items.push({ description: "", quantity: 1, unitPrice: 0 });
+          }
           return { ...f, items };
         });
         setItemSearch(s => ({ ...s, [itemIndex]: "" }));
         setCodeError(s => ({ ...s, [itemIndex]: false }));
         toast({ title: `Combo agregado al listado` });
+        
+        // Auto focus the next row's code input
+        setTimeout(() => {
+          document.getElementById(`product-code-input-${itemIndex + 1}`)?.focus();
+        }, 100);
         return;
       }
     } catch { /* not a combo — fall through */ }
@@ -1761,12 +1832,13 @@ export default function Facturas() {
         {/* Right: actions */}
         <div className="flex items-center gap-2">
           <Button
+            id="btn-save-invoice"
             variant="outline"
             className="font-semibold"
             onClick={handleSubmit}
             disabled={submitting}
           >
-            {submitting ? "Guardando..." : "Guardar"}
+            {submitting ? "Guardando..." : "Guardar [F4]"}
           </Button>
 
           {editingId && editingInvoice && currentStatus !== "pagada" && (
@@ -1780,11 +1852,12 @@ export default function Facturas() {
 
           {editingId && editingInvoice && currentStatus !== "cancelada" && (
             <Button
+              id="btn-cancel-invoice"
               variant="outline"
               className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 font-semibold"
               onClick={() => handleCancel(editingId)}
             >
-              <XCircle className="h-4 w-4 mr-1.5" /> Cancelar
+              <XCircle className="h-4 w-4 mr-1.5" /> Cancelar [F8]
             </Button>
           )}
 
@@ -1841,6 +1914,7 @@ export default function Facturas() {
               <div className="relative mt-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="client-search-input"
                   className="pl-9 bg-background"
                   placeholder="Nombre del cliente..."
                   value={clientSearch}
@@ -1994,6 +2068,7 @@ export default function Facturas() {
                           <div className="flex items-center gap-1.5">
                             <div className="flex flex-col shrink-0">
                               <Input
+                                id={`product-code-input-${i}`}
                                 type="text"
                                 className="bg-background h-8 text-sm text-center w-24 shrink-0"
                                 placeholder="Código"
@@ -2011,6 +2086,7 @@ export default function Facturas() {
                             <div className="relative flex-1">
                               <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                               <Input
+                                id={`product-search-input-${i}`}
                                 className="pl-8 pr-7 bg-background h-8 text-sm"
                                 placeholder="Buscar producto..."
                                 value={itemSearch[i] ?? ""}

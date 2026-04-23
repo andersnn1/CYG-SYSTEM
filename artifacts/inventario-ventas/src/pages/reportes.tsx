@@ -146,7 +146,23 @@ export default function Reportes() {
                       <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.pct}%` }}></div>
                     </div>
                     <p className={`text-xl font-bold ${item.textColor}`}>{formatCurrency(item.amount)}</p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    
+                    {item.label === "Gastos Operativos" && report.totalExpenses !== undefined ? (
+                      <div className="pt-1 mt-1 border-t border-border">
+                        <div className="flex justify-between text-[10px] sm:text-xs">
+                          <span className="text-muted-foreground">Gastos Mes:</span>
+                          <span className="font-semibold text-red-600 dark:text-red-400">-{formatCurrency(report.totalExpenses)}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] sm:text-xs">
+                          <span className="text-muted-foreground">Disponible:</span>
+                          <span className={`font-bold ${item.amount - report.totalExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                            {formatCurrency(item.amount - report.totalExpenses)}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    )}
                   </div>
                 ))}
               </div>

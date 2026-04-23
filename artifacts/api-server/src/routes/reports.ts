@@ -46,6 +46,20 @@ router.get("/reports/monthly", async (req, res): Promise<void> => {
     ganancia: netProfit * 0.10,
   };
 
+  // Gastos Registrados en el mes
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate = new Date(year, month, 0).toISOString().split("T")[0];
+
+  const { expensesTable } = await import("@workspace/db");
+  const [expensesResult] = await db.select({
+    total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
+  }).from(expensesTable)
+    .where(
+      sql`${expensesTable.expenseDate} >= ${startDate} AND ${expensesTable.expenseDate} <= ${endDate}`
+    );
+  const totalExpenses = Number(expensesResult?.total ?? 0);
+
+
   const clientMap = new Map<string, { clientId: number | null; clientName: string; totalPurchases: number; salesCount: number }>();
   for (const sale of sales) {
     const key = sale.clientName ?? "Cliente General";
@@ -79,6 +93,7 @@ router.get("/reports/monthly", async (req, res): Promise<void> => {
     totalShipping,
     netProfit,
     profitFirst,
+    totalExpenses,
     totalSales: sales.length,
     sales: sales.map(mapSale),
     topClients,

@@ -34,6 +34,11 @@ function mapInvoice(invoice: typeof invoicesTable.$inferSelect, items?: typeof i
     discount: Number(invoice.discount),
     tax: Number(invoice.tax),
     total: Number(invoice.total),
+    baseCost: invoice.baseCost ? Number(invoice.baseCost) : 0,
+    internalExpenses: invoice.internalExpenses ? Number(invoice.internalExpenses) : 0,
+    taxes: invoice.taxes ? Number(invoice.taxes) : 0,
+    partnerPayout: invoice.partnerPayout ? Number(invoice.partnerPayout) : 0,
+    ownerPayout: invoice.ownerPayout ? Number(invoice.ownerPayout) : 0,
     createdAt: invoice.createdAt.toISOString(),
     updatedAt: invoice.updatedAt.toISOString(),
     items: items?.map(item => ({

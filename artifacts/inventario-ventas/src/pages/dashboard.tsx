@@ -256,7 +256,13 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{formatCurrency(distributable)}</div>
-            <p className="text-xs mt-1 opacity-75">Utilidad real después de costos y envíos</p>
+            <div className="mt-2 pt-2 border-t border-primary-foreground/20">
+              <div className="flex justify-between items-center text-xs opacity-90">
+                <span>Cierre Real (Facturas):</span>
+                <span className="font-bold">{formatCurrency((summary as any).monthlyRealProfit ?? 0)}</span>
+              </div>
+              <p className="text-[10px] mt-1 opacity-70">Basado en gastos operativos de este mes</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -364,23 +370,42 @@ export default function Dashboard() {
       {/* Distribución de Fondos */}
       <Card>
         <CardHeader>
-          <div>
-            <CardTitle>Distribución de Fondos</CardTitle>
-            <p className="text-sm text-muted-foreground mt-0.5">Cómo se divide tu ganancia distribuible de <span className="font-semibold text-foreground">{formatCurrency(distributable)}</span></p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Distribución de Fondos</CardTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">Cómo se divide tu ganancia de <span className="font-semibold text-foreground">{formatCurrency(distributable)}</span></p>
+            </div>
+            {(summary as any).monthlyRealProfit > 0 && (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-lg">
+                <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-tight">Utilidad Real Mensual</p>
+                <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">{formatCurrency((summary as any).monthlyRealProfit)}</p>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Operación */}
             <div className="rounded-xl border-2 border-blue-500/30 bg-blue-500/10 p-4 space-y-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
-                <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Operación 50%</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
+                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Operación 50%</span>
+                </div>
               </div>
               <div className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatCurrency(summary.profitFirst?.operacion ?? 0)}</div>
-              <p className="text-xs text-muted-foreground">Gastos del negocio</p>
-              <div className="h-1.5 w-full bg-blue-200 dark:bg-blue-900/30 rounded-full mt-2">
-                <div className="h-full bg-blue-500 rounded-full w-1/2" />
+              
+              <div className="pt-2 mt-2 border-t border-blue-500/20">
+                <div className="flex justify-between text-[10px] sm:text-xs mb-1">
+                  <span className="text-muted-foreground">Gastos Registrados:</span>
+                  <span className="font-semibold text-red-600 dark:text-red-400">-{formatCurrency(monthlyExpenses)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] sm:text-xs">
+                  <span className="text-muted-foreground">Fondo Disponible:</span>
+                  <span className={`font-bold ${(summary.profitFirst?.operacion ?? 0) - monthlyExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                    {formatCurrency((summary.profitFirst?.operacion ?? 0) - monthlyExpenses)}
+                  </span>
+                </div>
               </div>
             </div>
 

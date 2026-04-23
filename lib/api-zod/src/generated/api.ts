@@ -519,6 +519,7 @@ export const GetMonthlyReportResponse = zod.object({
   totalIncome: zod.number(),
   totalCost: zod.number(),
   netProfit: zod.number(),
+  totalExpenses: zod.number().optional(),
   profitFirst: zod.object({
     operacion: zod.number(),
     dueno: zod.number(),
