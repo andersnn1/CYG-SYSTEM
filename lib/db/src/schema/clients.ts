@@ -10,6 +10,7 @@ export const clientsTable = pgTable("clients", {
   city: text("city").notNull(),
   department: text("department").notNull(),
   address: text("address"),
+  rtn: text("rtn"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

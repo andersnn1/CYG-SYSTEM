@@ -258,6 +258,7 @@ export const ListClientsResponseItem = zod.object({
   city: zod.string(),
   department: zod.string(),
   address: zod.string().nullish(),
+  rtn: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -273,6 +274,7 @@ export const CreateClientBody = zod.object({
   city: zod.string(),
   department: zod.string(),
   address: zod.string().nullish(),
+  rtn: zod.string().nullish(),
 });
 
 /**
@@ -290,6 +292,7 @@ export const GetClientResponse = zod.object({
   city: zod.string(),
   department: zod.string(),
   address: zod.string().nullish(),
+  rtn: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -308,6 +311,7 @@ export const UpdateClientBody = zod.object({
   city: zod.string().optional(),
   department: zod.string().optional(),
   address: zod.string().nullish(),
+  rtn: zod.string().nullish(),
 });
 
 export const UpdateClientResponse = zod.object({
@@ -318,6 +322,7 @@ export const UpdateClientResponse = zod.object({
   city: zod.string(),
   department: zod.string(),
   address: zod.string().nullish(),
+  rtn: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -518,8 +523,9 @@ export const GetMonthlyReportResponse = zod.object({
   year: zod.number(),
   totalIncome: zod.number(),
   totalCost: zod.number(),
+  totalShipping: zod.number(),
   netProfit: zod.number(),
-  totalExpenses: zod.number().optional(),
+  totalExpenses: zod.number(),
   profitFirst: zod.object({
     operacion: zod.number(),
     dueno: zod.number(),

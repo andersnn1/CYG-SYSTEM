@@ -47,6 +47,7 @@ type FormData = {
   city: string;
   department: string;
   address: string;
+  rtn: string;
 };
 
 const defaultForm: FormData = {
@@ -56,6 +57,7 @@ const defaultForm: FormData = {
   city: "",
   department: "",
   address: "",
+  rtn: "",
 };
 
 interface Invoice {
@@ -111,6 +113,7 @@ export default function Clientes() {
       city: client.city,
       department: client.department,
       address: client.address ?? "",
+      rtn: client.rtn ?? "",
     });
     setFormOpen(true);
   };
@@ -128,6 +131,7 @@ export default function Clientes() {
       city: form.city,
       department: form.department,
       address: form.address || null,
+      rtn: form.rtn || null,
     };
 
     if (editClient) {
@@ -219,6 +223,12 @@ export default function Clientes() {
                           <span className="truncate">{client.email}</span>
                         </div>
                       )}
+                      {client.rtn && (
+                        <div className="flex items-center gap-2 text-sm font-mono text-blue-500">
+                          <FileText className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span>RTN: {client.rtn}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
@@ -274,6 +284,12 @@ export default function Clientes() {
                   <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Mail className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="truncate">{selectedClient.email}</span>
+                  </div>
+                )}
+                {selectedClient.rtn && (
+                  <div className="flex items-center gap-1.5 text-sm font-mono text-blue-500">
+                    <FileText className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>RTN: {selectedClient.rtn}</span>
                   </div>
                 )}
               </div>
@@ -391,6 +407,10 @@ export default function Clientes() {
             <div className="col-span-2 space-y-1">
               <Label>Direccion (opcional)</Label>
               <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Col. Kennedy, Bloque A..." />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>RTN (opcional)</Label>
+              <Input value={form.rtn} onChange={e => setForm({ ...form, rtn: e.target.value })} placeholder="0801-1990-XXXXX" />
             </div>
           </div>
           <DialogFooter>

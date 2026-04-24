@@ -15,7 +15,9 @@ export interface MonthlyReport {
   year: number;
   totalIncome: number;
   totalCost: number;
+  totalShipping: number;
   netProfit: number;
+  totalExpenses: number;
   profitFirst: ProfitFirst;
   totalSales: number;
   sales: Sale[];

@@ -59,10 +59,42 @@ export default function Sublimacion() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListSublimationItemsQueryKey() });
 
+  const suggestNextCode = (type: "maquinaria" | "consumible") => {
+    const relevant = items?.filter(i => i.itemType === type && i.code) || [];
+    if (relevant.length === 0) return type === "maquinaria" ? "MAQ-001" : "INS-001";
+
+    const codes = relevant.map(i => i.code!).filter(c => /\d+$/.test(c));
+    if (codes.length === 0) return type === "maquinaria" ? "MAQ-001" : "INS-001";
+
+    const sorted = codes.sort((a, b) => {
+        const numA = parseInt(a.match(/\d+$/)![0]);
+        const numB = parseInt(b.match(/\d+$/)![0]);
+        return numB - numA;
+    });
+
+    const lastCode = sorted[0];
+    const match = lastCode.match(/^(.*?)(\d+)$/);
+    if (!match) return lastCode + "-001";
+
+    const prefix = match[1];
+    const num = parseInt(match[2]);
+    return `${prefix}${String(num + 1).padStart(match[2].length, "0")}`;
+  };
+
   const openCreate = () => {
     setEditItem(null);
-    setForm(defaultForm);
+    setForm({ ...defaultForm, code: suggestNextCode("consumible") });
     setFormOpen(true);
+  };
+
+  const handleTypeChange = (v: "maquinaria" | "consumible") => {
+    setForm(f => ({
+      ...f,
+      itemType: v,
+      code: f.code === "" || f.code === suggestNextCode(f.itemType === "maquinaria" ? "maquinaria" : "consumible")
+        ? suggestNextCode(v)
+        : f.code
+    }));
   };
 
   const openEdit = (item: SublimationItem) => {
@@ -313,7 +345,7 @@ export default function Sublimacion() {
             </div>
             <div className="space-y-1">
               <Label>Tipo</Label>
-              <Select value={form.itemType} onValueChange={(v) => setForm({ ...form, itemType: v as "maquinaria" | "consumible" })}>
+              <Select value={form.itemType} onValueChange={handleTypeChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="maquinaria">Maquinaria</SelectItem>

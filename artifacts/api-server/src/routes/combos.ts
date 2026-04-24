@@ -1,22 +1,25 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, combosTable, comboItemsTable } from "@workspace/db";
+import { db, combosTable, comboItemsTable, perfumeryTable, sublimationTable } from "@workspace/db";
 import { z } from "zod";
 
 const router: IRouter = Router();
 
 function mapCombo(
   combo: typeof combosTable.$inferSelect,
-  items?: typeof comboItemsTable.$inferSelect[],
+  items?: (typeof comboItemsTable.$inferSelect & { costPrice?: number })[],
+  totalCost: number = 0
 ) {
   return {
     ...combo,
     fixedPrice: combo.fixedPrice !== null ? Number(combo.fixedPrice) : null,
+    totalCost,
     createdAt: combo.createdAt.toISOString(),
     updatedAt: combo.updatedAt.toISOString(),
     items: items?.map(i => ({
       ...i,
       unitPrice: Number(i.unitPrice),
+      costPrice: i.costPrice ? Number(i.costPrice) : 0,
     })),
   };
 }
@@ -53,7 +56,20 @@ router.get("/combos", async (req, res): Promise<void> => {
   const withItems = await Promise.all(
     combos.map(async combo => {
       const items = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
-      return mapCombo(combo, items);
+      let totalCost = 0;
+      const itemsWithCost = await Promise.all(items.map(async item => {
+        let costPrice = 0;
+        if (item.productType === "perfumeria") {
+          const [p] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+          costPrice = Number(p?.costPrice ?? 0);
+        } else {
+          const [s] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+          costPrice = Number(s?.costPrice ?? 0);
+        }
+        totalCost += costPrice * item.quantity;
+        return { ...item, costPrice };
+      }));
+      return mapCombo(combo, itemsWithCost, totalCost);
     }),
   );
   res.json(withItems);
@@ -65,8 +81,23 @@ router.get("/combos/:code", async (req, res): Promise<void> => {
   const [combo] = await db.select().from(combosTable).where(eq(combosTable.code, code));
   if (!combo) { res.status(404).json({ error: "Combo no encontrado" }); return; }
   if (!combo.active) { res.status(404).json({ error: "Combo inactivo" }); return; }
+  
   const items = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
-  res.json(mapCombo(combo, items));
+  let totalCost = 0;
+  const itemsWithCost = await Promise.all(items.map(async item => {
+    let costPrice = 0;
+    if (item.productType === "perfumeria") {
+      const [p] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+      costPrice = Number(p?.costPrice ?? 0);
+    } else {
+      const [s] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+      costPrice = Number(s?.costPrice ?? 0);
+    }
+    totalCost += costPrice * item.quantity;
+    return { ...item, costPrice };
+  }));
+  
+  res.json(mapCombo(combo, itemsWithCost, totalCost));
 });
 
 // POST /combos

@@ -37,6 +37,7 @@ router.post("/clients", async (req, res): Promise<void> => {
     city: parsed.data.city,
     department: parsed.data.department,
     address: parsed.data.address ?? null,
+    rtn: parsed.data.rtn ?? null,
   }).returning();
   res.status(201).json(mapClient(client));
 });
@@ -73,6 +74,7 @@ router.patch("/clients/:id", async (req, res): Promise<void> => {
   if (parsed.data.city !== undefined) updateData.city = parsed.data.city;
   if (parsed.data.department !== undefined) updateData.department = parsed.data.department;
   if (parsed.data.address !== undefined) updateData.address = parsed.data.address;
+  if (parsed.data.rtn !== undefined) updateData.rtn = parsed.data.rtn;
 
   const [client] = await db.update(clientsTable).set(updateData).where(eq(clientsTable.id, params.data.id)).returning();
   if (!client) {

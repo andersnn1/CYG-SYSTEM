@@ -58,7 +58,10 @@ async function generateInvoiceNumber(): Promise<string> {
     .limit(1);
 
   if (!last) return "FAC-0001";
-  const num = parseInt(last.invoiceNumber.replace("FAC-", "")) + 1;
+  const lastNumStr = last.invoiceNumber.split("-")[1];
+  const lastNum = parseInt(lastNumStr);
+  if (isNaN(lastNum)) return `FAC-${Math.floor(Math.random() * 10000)}`; 
+  const num = lastNum + 1;
   return `FAC-${String(num).padStart(4, "0")}`;
 }
 
@@ -91,162 +94,168 @@ router.post("/invoices", async (req, res): Promise<void> => {
   const parsed = CreateInvoiceBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { items, ...invoiceData } = parsed.data;
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  const discount = invoiceData.discount ?? 0;
-  const tax = invoiceData.tax ?? 0;
-  const total = subtotal - discount + tax;
+  try {
+    console.log("INVOICE POST PAYLOAD:", JSON.stringify(parsed.data, null, 2));
+    const { items, ...invoiceData } = parsed.data;
+    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const discount = invoiceData.discount ?? 0;
+    const tax = invoiceData.tax ?? 0;
+    const total = subtotal - discount + tax;
 
-  // Auto-fill client data if clientId provided
-  let clientName = invoiceData.clientName;
-  let clientPhone = invoiceData.clientPhone ?? null;
-  let clientEmail = invoiceData.clientEmail ?? null;
-  let clientAddress = invoiceData.clientAddress ?? null;
-  let clientCity = invoiceData.clientCity ?? null;
-  let clientDepartment = invoiceData.clientDepartment ?? null;
+    // Auto-fill client data if clientId provided
+    let clientName = invoiceData.clientName;
+    let clientPhone = invoiceData.clientPhone ?? null;
+    let clientEmail = invoiceData.clientEmail ?? null;
+    let clientAddress = invoiceData.clientAddress ?? null;
+    let clientCity = invoiceData.clientCity ?? null;
+    let clientDepartment = invoiceData.clientDepartment ?? null;
 
-  if (invoiceData.clientId) {
-    const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, invoiceData.clientId));
-    if (client) {
-      clientName = client.name;
-      clientPhone = client.phone ?? null;
-      clientEmail = client.email ?? null;
-      clientAddress = client.address ?? null;
-      clientCity = client.city;
-      clientDepartment = client.department;
+    if (invoiceData.clientId) {
+      const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, invoiceData.clientId));
+      if (client) {
+        clientName = client.name;
+        clientPhone = client.phone ?? null;
+        clientEmail = client.email ?? null;
+        clientAddress = client.address ?? null;
+        clientCity = client.city;
+        clientDepartment = client.department;
+      }
     }
-  }
 
-  const invoiceNumber = await generateInvoiceNumber();
+    const invoiceNumber = await generateInvoiceNumber();
 
-  const [invoice] = await db.insert(invoicesTable).values({
-    invoiceNumber,
-    clientId: invoiceData.clientId ?? null,
-    clientName,
-    clientPhone,
-    clientEmail,
-    clientAddress,
-    clientCity,
-    clientDepartment,
-    status: "pendiente",
-    subtotal: String(subtotal),
-    discount: String(discount),
-    tax: String(tax),
-    total: String(total),
-    notes: invoiceData.notes ?? null,
-    clientRtn: invoiceData.clientRtn ?? null,
-    paymentMethod: invoiceData.paymentMethod ?? "efectivo",
-    transferReference: invoiceData.transferReference ?? null,
-    issueDate: invoiceData.issueDate,
-    dueDate: invoiceData.dueDate ?? null,
-    numeroGuia: invoiceData.numeroGuia ?? null,
-    transportista: invoiceData.transportista ?? null,
-    fotoGuiaPath: invoiceData.fotoGuiaPath ?? null,
-    estadoEntrega: invoiceData.estadoEntrega ?? "Pendiente",
-    // ── Utilidad Real ─────────────────────────────────────────────────────────
-    baseCost: invoiceData.baseCost != null ? String(invoiceData.baseCost) : null,
-    internalExpenses: String(invoiceData.internalExpenses ?? 0),
-    internalExpensesNote: invoiceData.internalExpensesNote ?? null,
-    taxes: String(invoiceData.taxes ?? 0),
-    partnerPayout: invoiceData.partnerPayout != null ? String(invoiceData.partnerPayout) : null,
-    ownerPayout: invoiceData.ownerPayout != null ? String(invoiceData.ownerPayout) : null,
-  }).returning();
+    const [invoice] = await db.insert(invoicesTable).values({
+      invoiceNumber,
+      clientId: invoiceData.clientId ?? null,
+      clientName,
+      clientPhone,
+      clientEmail,
+      clientAddress,
+      clientCity,
+      clientDepartment,
+      status: "pendiente",
+      subtotal: String(subtotal),
+      discount: String(discount),
+      tax: String(tax),
+      total: String(total),
+      notes: invoiceData.notes ?? null,
+      clientRtn: invoiceData.clientRtn ?? null,
+      paymentMethod: invoiceData.paymentMethod ?? "efectivo",
+      transferReference: invoiceData.transferReference ?? null,
+      issueDate: invoiceData.issueDate,
+      dueDate: invoiceData.dueDate ?? null,
+      numeroGuia: invoiceData.numeroGuia ?? null,
+      transportista: invoiceData.transportista ?? null,
+      fotoGuiaPath: invoiceData.fotoGuiaPath ?? null,
+      estadoEntrega: invoiceData.estadoEntrega ?? "Pendiente",
+      // ── Utilidad Real ─────────────────────────────────────────────────────────
+      baseCost: invoiceData.baseCost != null ? String(invoiceData.baseCost) : null,
+      internalExpenses: String(invoiceData.internalExpenses ?? 0),
+      internalExpensesNote: invoiceData.internalExpensesNote ?? null,
+      taxes: String(invoiceData.taxes ?? 0),
+      partnerPayout: invoiceData.partnerPayout != null ? String(invoiceData.partnerPayout) : null,
+      ownerPayout: invoiceData.ownerPayout != null ? String(invoiceData.ownerPayout) : null,
+    }).returning();
 
-  const insertedItems = await db.insert(invoiceItemsTable).values(
-    items.map(item => ({
-      invoiceId: invoice.id,
-      description: item.description,
-      quantity: item.quantity,
-      unitPrice: String(item.unitPrice),
-      total: String(item.quantity * item.unitPrice),
-      productId: item.productId ?? null,
-      productType: item.productType ?? null,
-    }))
-  ).returning();
+    const insertedItems = await db.insert(invoiceItemsTable).values(
+      items.map(item => ({
+        invoiceId: invoice.id,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: String(item.unitPrice),
+        total: String(item.quantity * item.unitPrice),
+        productId: item.productId ?? null,
+        productType: item.productType ?? null,
+      }))
+    ).returning();
 
-  // Discount stock and create sale records for items linked to products
-  for (const item of items) {
-    if (!item.productId || !item.productType) continue;
+    // Discount stock and create sale records for items linked to products
+    for (const item of items) {
+      if (!item.productId || !item.productType) continue;
 
-    let productName: string | null = null;
-    let costPrice: number | null = null;
+      let productName: string | null = null;
+      let costPrice: number | null = null;
 
-    if (item.productType === "perfumeria") {
-      const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
-      if (product) {
-        productName = product.name;
-        costPrice = Number(product.costPrice ?? 0);
-        await db.update(perfumeryTable)
-          .set({ stock: product.stock - item.quantity })
-          .where(eq(perfumeryTable.id, item.productId));
-      }
-    } else if (item.productType === "sublimacion") {
-      const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
-      if (product) {
-        productName = product.name;
-        costPrice = Number(product.costPrice ?? 0);
-        if (product.stock !== null) {
-          await db.update(sublimationTable)
+      if (item.productType === "perfumeria") {
+        const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+        if (product) {
+          productName = product.name;
+          costPrice = Number(product.costPrice ?? 0);
+          await db.update(perfumeryTable)
             .set({ stock: product.stock - item.quantity })
-            .where(eq(sublimationTable.id, item.productId));
+            .where(eq(perfumeryTable.id, item.productId));
         }
-      }
-    } else if (item.productType === "combo") {
-      const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
-      if (combo) {
-        productName = combo.name;
-        
-        let totalCost = 0;
-        const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
-        
-        for (const cItem of comboItems) {
-          if (cItem.productType === "perfumeria") {
-            const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
-            if (cProduct) {
-              totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-              await db.update(perfumeryTable)
-                .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
-                .where(eq(perfumeryTable.id, cItem.productId));
-            }
-          } else if (cItem.productType === "sublimacion") {
-            const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
-            if (cProduct) {
-              totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-              if (cProduct.stock !== null) {
-                await db.update(sublimationTable)
+      } else if (item.productType === "sublimacion") {
+        const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+        if (product) {
+          productName = product.name;
+          costPrice = Number(product.costPrice ?? 0);
+          if (product.stock !== null) {
+            await db.update(sublimationTable)
+              .set({ stock: product.stock - item.quantity })
+              .where(eq(sublimationTable.id, item.productId));
+          }
+        }
+      } else if (item.productType === "combo") {
+        const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+        if (combo) {
+          productName = combo.name;
+          
+          let totalCost = 0;
+          const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+          
+          for (const cItem of comboItems) {
+            if (cItem.productType === "perfumeria") {
+              const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+              if (cProduct) {
+                totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                await db.update(perfumeryTable)
                   .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
-                  .where(eq(sublimationTable.id, cItem.productId));
+                  .where(eq(perfumeryTable.id, cItem.productId));
+              }
+            } else if (cItem.productType === "sublimacion") {
+              const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+              if (cProduct) {
+                totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                if (cProduct.stock !== null) {
+                  await db.update(sublimationTable)
+                    .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                    .where(eq(sublimationTable.id, cItem.productId));
+                }
               }
             }
           }
+          costPrice = totalCost;
         }
-        costPrice = totalCost;
+      }
+
+      if (productName !== null && costPrice !== null) {
+        const totalAmount = item.quantity * item.unitPrice;
+        const netProfit = totalAmount - (item.quantity * costPrice);
+        await db.insert(salesTable).values({
+          invoiceId: invoice.id,
+          clientId: invoice.clientId ?? null,
+          clientName: invoice.clientName,
+          productType: item.productType,
+          productId: item.productId,
+          productName,
+          quantity: item.quantity,
+          unitPrice: String(item.unitPrice),
+          costPrice: String(costPrice),
+          shippingCost: "0",
+          totalAmount: String(totalAmount),
+          netProfit: String(netProfit),
+          notes: `Generado desde factura ${invoiceNumber}`,
+          saleDate: invoiceData.issueDate,
+        });
       }
     }
 
-    if (productName !== null && costPrice !== null) {
-      const totalAmount = item.quantity * item.unitPrice;
-      const netProfit = totalAmount - (item.quantity * costPrice);
-      await db.insert(salesTable).values({
-        invoiceId: invoice.id,
-        clientId: invoice.clientId ?? null,
-        clientName: invoice.clientName,
-        productType: item.productType,
-        productId: item.productId,
-        productName,
-        quantity: item.quantity,
-        unitPrice: String(item.unitPrice),
-        costPrice: String(costPrice),
-        shippingCost: "0",
-        totalAmount: String(totalAmount),
-        netProfit: String(netProfit),
-        notes: `Generado desde factura ${invoiceNumber}`,
-        saleDate: invoiceData.issueDate,
-      });
-    }
+    res.status(201).json(mapInvoice(invoice, insertedItems));
+  } catch (err: any) {
+    console.error("CRITICAL ERROR POST /invoices:", err);
+    res.status(500).json({ error: "Error al generar factura: " + err.message });
   }
-
-  res.status(201).json(mapInvoice(invoice, insertedItems));
 });
 
 // PATCH /invoices/:id

@@ -1165,7 +1165,11 @@ components:
           type: number
         totalCost:
           type: number
+        totalShipping:
+          type: number
         netProfit:
+          type: number
+        totalExpenses:
           type: number
         profitFirst:
           $ref: "#/components/schemas/ProfitFirst"
@@ -1188,7 +1192,9 @@ components:
         - year
         - totalIncome
         - totalCost
+        - totalShipping
         - netProfit
+        - totalExpenses
         - profitFirst
         - totalSales
         - sales

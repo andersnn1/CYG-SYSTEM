@@ -62,6 +62,7 @@ interface ProductOption {
   price: number;
   type: "perfumeria" | "sublimacion";
   code?: string | null;
+  stock: number;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -564,6 +565,7 @@ export default function Cotizaciones() {
 
   const [clientSearch, setClientSearch] = useState("");
   const [clientDropOpen, setClientDropOpen] = useState(false);
+  const [highlightedClientIndex, setHighlightedClientIndex] = useState(0);
   const clientRef = useRef<HTMLDivElement>(null);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -614,6 +616,8 @@ export default function Cotizaciones() {
 
   const [itemSearch, setItemSearch] = useState<Record<number, string>>({});
   const [itemDropOpen, setItemDropOpen] = useState<Record<number, boolean>>({});
+  const [highlightedItemIndex, setHighlightedItemIndex] = useState<Record<number, number>>({});
+
   useEffect(() => {
     async function loadProducts() {
       try {
@@ -627,6 +631,7 @@ export default function Cotizaciones() {
           price: Number(p.salePrice ?? 0),
           type: "perfumeria" as const,
           code: p.code ?? null,
+          stock: Number(p.stock ?? 0),
         }));
         const subOpts: ProductOption[] = (Array.isArray(sub) ? sub : []).map((s: any) => ({
           id: s.id,
@@ -634,12 +639,47 @@ export default function Cotizaciones() {
           price: Number(s.salePrice ?? 0),
           type: "sublimacion" as const,
           code: s.code ?? null,
+          stock: Number(s.stock ?? 0),
         }));
         setProducts([...perfOpts, ...subOpts]);
       } catch { /* products unavailable */ }
     }
     loadProducts();
   }, []);
+  
+  // ── Keyboard Shortcuts ─────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (view === "list") return;
+
+      switch (e.key) {
+        case "F2":
+          e.preventDefault();
+          const lastIdx = form.items.length - 1;
+          const searchInput = document.getElementById(`product-search-input-${lastIdx}`);
+          searchInput?.focus();
+          break;
+        case "F4":
+          e.preventDefault();
+          handleSubmit();
+          break;
+        case "F7":
+        case "F9":
+          e.preventDefault();
+          const nameInput = document.getElementById("client-search-input");
+          const rtnInput = document.getElementById("client-rtn-input");
+          if (e.key === "F9" && document.activeElement === nameInput) {
+            rtnInput?.focus();
+          } else {
+            nameInput?.focus();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [view, form.items.length, form.clientName, form.clientRtn]);
 
 
   const loadQuotes = async () => {
@@ -741,7 +781,7 @@ export default function Cotizaciones() {
     setClientDropOpen(false);
   };
 
-  const selectProduct = (itemIndex: number, product: ProductOption) => {
+  const selectProduct = (itemIndex: number, product: ProductOption, initialQuantity?: number) => {
     setForm(f => {
       const items = [...f.items];
       items[itemIndex] = {
@@ -758,14 +798,24 @@ export default function Cotizaciones() {
   };
 
   const handleCodeSearch = async (itemIndex: number, inputValue: string) => {
-    const trimmed = inputValue.trim();
+    let trimmed = inputValue.trim();
     if (!trimmed) return;
+
+    let quantityPrefix = 1;
+    if (trimmed.includes("*")) {
+      const parts = trimmed.split("*");
+      const q = Number(parts[0]);
+      if (!isNaN(q) && q > 0) {
+        quantityPrefix = q;
+        trimmed = parts.slice(1).join("*").trim();
+      }
+    }
 
     // 1. Exact product code match
     const found = products.find(p => p.code && p.code.toLowerCase() === trimmed.toLowerCase())
       ?? products.find(p => p.id === Number(trimmed));
     if (found) {
-      selectProduct(itemIndex, found);
+      selectProduct(itemIndex, found, quantityPrefix);
       return;
     }
 
@@ -1344,15 +1394,38 @@ export default function Cotizaciones() {
               <div className="relative mt-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="client-search-input"
                   className="pl-9 bg-background"
                   placeholder="Nombre del cliente..."
                   value={clientSearch}
                   onChange={e => {
                     setClientSearch(e.target.value);
                     setClientDropOpen(true);
+                    setHighlightedClientIndex(0);
                     setForm(f => ({ ...f, clientName: e.target.value, clientId: "" }));
                   }}
-                  onFocus={() => setClientDropOpen(true)}
+                  onKeyDown={e => {
+                    const matches = (clients ?? [])
+                      .filter((c: Client) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .slice(0, 8);
+                    
+                    if (clientDropOpen && matches.length > 0) {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setHighlightedClientIndex(prev => Math.min(prev + 1, matches.length - 1));
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setHighlightedClientIndex(prev => Math.max(prev - 1, 0));
+                      } else if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        selectClient(matches[highlightedClientIndex]);
+                      }
+                    }
+                  }}
+                  onFocus={() => {
+                    setClientDropOpen(true);
+                    setHighlightedClientIndex(0);
+                  }}
                   onBlur={() => setTimeout(() => setClientDropOpen(false), 150)}
                 />
               </div>
@@ -1361,15 +1434,18 @@ export default function Cotizaciones() {
                   {(clients ?? [])
                     .filter((c: Client) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
                     .slice(0, 8)
-                    .map((c: Client) => (
+                    .map((c: Client, idx: number) => (
                       <button
                         key={c.id}
                         type="button"
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors first:rounded-t-xl last:rounded-b-xl"
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors first:rounded-t-xl last:rounded-b-xl ${
+                          idx === highlightedClientIndex ? "bg-blue-600 text-white" : "hover:bg-muted text-foreground"
+                        }`}
                         onMouseDown={() => selectClient(c)}
+                        onMouseEnter={() => setHighlightedClientIndex(idx)}
                       >
-                        <span className="font-medium text-foreground">{c.name}</span>
-                        {c.phone && <span className="text-muted-foreground ml-2 text-xs">{c.phone}</span>}
+                        <span className={`font-medium ${idx === highlightedClientIndex ? "text-white" : "text-foreground"}`}>{c.name}</span>
+                        {c.phone && <span className={`ml-2 text-xs ${idx === highlightedClientIndex ? "text-blue-100" : "text-muted-foreground"}`}>{c.phone}</span>}
                       </button>
                     ))}
                   {(clients ?? []).filter((c: Client) => c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
@@ -1396,6 +1472,17 @@ export default function Cotizaciones() {
                 value={form.clientPhone}
                 onChange={e => setForm(f => ({ ...f, clientPhone: e.target.value }))}
                 placeholder="+504..."
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs text-muted-foreground font-medium">RTN</Label>
+              <Input
+                id="client-rtn-input"
+                className="mt-1 bg-background"
+                value={form.clientRtn}
+                onChange={e => setForm(f => ({ ...f, clientRtn: e.target.value.replace(/\D/g,"").slice(0,14) }))}
+                placeholder="RTN de la empresa"
               />
             </div>
 
@@ -1478,6 +1565,7 @@ export default function Cotizaciones() {
                     <div className="relative mt-1">
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
+                        id={`product-search-input-${i}`}
                         className="pl-9 bg-card"
                         placeholder="Buscar producto o escribir descripción..."
                         value={itemSearch[i] !== undefined ? itemSearch[i] : item.description}
@@ -1485,29 +1573,63 @@ export default function Cotizaciones() {
                           const val = e.target.value;
                           setItemSearch(s => ({ ...s, [i]: val }));
                           setItemDropOpen(s => ({ ...s, [i]: true }));
+                          setHighlightedItemIndex(s => ({ ...s, [i]: 0 }));
                           updateItem(i, "description", val);
                         }}
                         onKeyDown={e => {
-                          if (e.key === "Enter") {
+                          const filtered = products.filter(p =>
+                            !itemSearch[i] || p.label.toLowerCase().includes(itemSearch[i].toLowerCase())
+                          ).slice(0, 8);
+
+                          if (itemDropOpen[i] && filtered.length > 0) {
+                            const currentIdx = highlightedItemIndex[i] || 0;
+                            if (e.key === "ArrowDown") {
+                              e.preventDefault();
+                              setHighlightedItemIndex(s => ({ ...s, [i]: Math.min(currentIdx + 1, filtered.length - 1) }));
+                            } else if (e.key === "ArrowUp") {
+                              e.preventDefault();
+                              setHighlightedItemIndex(s => ({ ...s, [i]: Math.max(currentIdx - 1, 0) }));
+                            } else if (e.key === "Enter" || e.key === "Tab") {
+                              e.preventDefault();
+                              selectProduct(i, filtered[currentIdx]);
+                            }
+                          } else if (e.key === "Enter") {
                             e.preventDefault();
                             handleCodeSearch(i, (itemSearch[i] ?? item.description));
                           }
                         }}
-                        onFocus={() => setItemDropOpen(s => ({ ...s, [i]: true }))}
+                        onFocus={() => {
+                          setItemDropOpen(s => ({ ...s, [i]: true }));
+                          setHighlightedItemIndex(s => ({ ...s, [i]: 0 }));
+                        }}
                         onBlur={() => setTimeout(() => setItemDropOpen(s => ({ ...s, [i]: false })), 150)}
                       />
                     </div>
                     {itemDropOpen[i] && filteredProducts.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                        {filteredProducts.map(p => (
+                        {filteredProducts.map((p, idx) => (
                           <button
                             key={`${p.type}-${p.id}`}
                             type="button"
-                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors first:rounded-t-xl last:rounded-b-xl"
+                            className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between first:rounded-t-xl last:rounded-b-xl ${
+                              idx === (highlightedItemIndex[i] || 0) ? "bg-blue-600 text-white" : "hover:bg-muted text-foreground"
+                            }`}
                             onMouseDown={() => selectProduct(i, p)}
+                            onMouseEnter={() => setHighlightedItemIndex(s => ({ ...s, [i]: idx }))}
                           >
-                            <span className="font-medium text-foreground">{p.label}</span>
-                            <span className="text-muted-foreground text-xs ml-2">{formatCurrency(p.price)}</span>
+                            <div className="flex items-center gap-2 truncate">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                                idx === (highlightedItemIndex[i] || 0) 
+                                  ? "bg-white/20 text-white" 
+                                  : (p.type === "perfumeria" ? "bg-purple-100 text-purple-700" : "bg-cyan-100 text-cyan-700")
+                              }`}>
+                                {p.type === "perfumeria" ? "Perf." : "Sub."}
+                              </span>
+                              <span className="truncate font-medium">{p.label}</span>
+                            </div>
+                            <span className={`text-xs font-bold shrink-0 ml-2 ${idx === (highlightedItemIndex[i] || 0) ? "text-white" : "text-foreground"}`}>
+                              {formatCurrency(p.price)}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -1553,15 +1675,48 @@ export default function Cotizaciones() {
           </section>
 
           {/* Notas */}
-          <section className="bg-card rounded-xl border p-5 space-y-3">
-            <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Notas</h2>
-            <Textarea
-              className="bg-background resize-none text-sm"
-              value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Condiciones especiales, términos de la cotización..."
-              rows={3}
-            />
+          <section className="bg-blue-50 dark:bg-blue-950/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-900/50 space-y-4 shadow-sm">
+            <h2 className="text-[10px] text-blue-600/70 font-black uppercase tracking-widest">Resumen de Cotización</h2>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] text-blue-600/70 font-black uppercase tracking-widest">
+                <span>Subtotal</span>
+                <span>{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex items-center justify-between group">
+                <Label className="text-[10px] text-red-600/70 font-black uppercase tracking-widest">Descuento</Label>
+                <Input
+                  type="number" min={0} step="0.01"
+                  className="h-6 border-transparent hover:border-blue-200 focus:border-blue-400 bg-transparent text-right w-28 px-1 shadow-none text-sm text-red-600 font-black"
+                  value={form.discount || ""}
+                  onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="flex items-center justify-between group">
+                <Label className="text-[10px] text-blue-600/70 font-black uppercase tracking-widest">Impuesto (ISV)</Label>
+                <Input
+                  type="number" min={0} step="0.01"
+                  className="h-6 border-transparent hover:border-blue-200 focus:border-blue-400 bg-transparent text-right w-28 px-1 shadow-none text-sm font-black text-blue-800"
+                  value={form.tax || ""}
+                  onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+            
+            <div className="pt-4 border-t-2 border-blue-200/30 flex flex-col items-end">
+              <span className="text-[10px] font-black text-blue-600/40 uppercase tracking-[0.3em]">Total Neto</span>
+              <span className="text-5xl font-black text-blue-600 tracking-tighter leading-none py-1">{formatCurrency(total)}</span>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-3 pt-2">
+               <Button 
+                 id="btn-save-quote"
+                 onClick={handleSubmit}
+                 disabled={submitting}
+                 className="bg-blue-600 hover:bg-blue-700 text-white font-black h-12 shadow-lg shadow-blue-600/20 uppercase tracking-wider text-xs w-full"
+               >
+                 {submitting ? "Guardando..." : "Guardar Cotización (F4)"}
+               </Button>
+            </div>
           </section>
         </div>
 
