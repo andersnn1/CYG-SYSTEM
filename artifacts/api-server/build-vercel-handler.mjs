@@ -11,14 +11,14 @@ const rootDir = path.resolve(artifactDir, "..", "..");
 async function buildVercelHandler() {
   // Entry: api/_entry.ts — exports the Express app without calling app.listen()
   const entryPoint = path.resolve(rootDir, "api", "_entry.ts");
-  // Output: api/index.mjs — Vercel picks this up as the serverless function
-  const outfile = path.resolve(rootDir, "api", "index.mjs");
+  // Output: api/index.js — Vercel picks this up as the serverless function
+  const outfile = path.resolve(rootDir, "api", "index.js");
 
   await esbuild({
     entryPoints: [entryPoint],
     platform: "node",
     bundle: true,
-    format: "esm",
+    format: "cjs",
     outfile,
     logLevel: "info",
     external: [
@@ -47,19 +47,9 @@ async function buildVercelHandler() {
       "oracledb",
     ],
     sourcemap: "linked",
-    banner: {
-      js: `import { createRequire as __bannerCrReq } from 'node:module';
-import __bannerPath from 'node:path';
-import __bannerUrl from 'node:url';
-
-globalThis.require = __bannerCrReq(import.meta.url);
-globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
-globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
-    `,
-    },
   });
 
-  console.log("✅ Vercel handler built → api/index.mjs");
+  console.log("✅ Vercel handler built → api/index.js");
 }
 
 buildVercelHandler().catch((err) => {

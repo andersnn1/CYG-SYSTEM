@@ -22,9 +22,8 @@ out-tsc
 # Local file uploads (use Cloudinary in production)
 guias_evidencia/
 
-# Generated Vercel serverless handler (built during vercel-build)
-api/index.mjs
-api/index.mjs.map
+# Generated Vercel serverless handler map (built during vercel-build)
+api/index.js.map
 
 # dependencies
 node_modules/
