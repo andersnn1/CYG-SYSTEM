@@ -2,7 +2,7 @@
   "version": 2,
   "buildCommand": "pnpm -w run vercel-build",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "outputDirectory": "public",
+  "outputDirectory": "dist",
   "functions": {
     "api/index.js": {
       "runtime": "nodejs20.x",
