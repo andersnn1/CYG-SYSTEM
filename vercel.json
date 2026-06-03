@@ -4,13 +4,13 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "outputDirectory": "artifacts/inventario-ventas/dist/public",
   "functions": {
-    "api/index.ts": {
-      "runtime": "@vercel/node@5",
+    "api/index.mjs": {
+      "runtime": "nodejs20.x",
       "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.ts" },
+    { "source": "/api/(.*)", "destination": "/api/index.mjs" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
