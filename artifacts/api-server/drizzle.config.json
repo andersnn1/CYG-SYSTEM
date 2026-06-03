@@ -1,0 +1,8 @@
+{
+  "schema": "../../lib/db/src/schema/index.ts",
+  "out": "../../lib/db/migrations",
+  "dialect": "postgresql",
+  "dbCredentials": {
+    "url": "postgresql://postgres:admin123@localhost:5433/candg_electronics"
+  }
+}

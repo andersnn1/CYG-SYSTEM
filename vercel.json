@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "pnpm run vercel-build",
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "outputDirectory": "artifacts/inventario-ventas/dist/public",
+  "functions": {
+    "api/index.ts": {
+      "runtime": "@vercel/node@5",
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

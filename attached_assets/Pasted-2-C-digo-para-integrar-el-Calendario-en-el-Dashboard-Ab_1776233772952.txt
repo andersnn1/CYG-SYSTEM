@@ -1,0 +1,53 @@
+2. Código para integrar el Calendario en el Dashboard
+Abre tu archivo del Dashboard (probablemente src/pages/Dashboard.tsx o similar) y añade el componente en el grid principal. Aquí tienes cómo debería verse la estructura:
+
+TypeScript
+import React from 'react';
+// 1. Importa tu nuevo calendario
+import { InteractiveCalendar } from '../components/InteractiveCalendar'; 
+import { Package, FileText, TrendingUp } from 'lucide-react'; // Tus iconos actuales
+
+const Dashboard = () => {
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">Panel de Control - C&G Electronics</h1>
+      
+      {/* Grid Superior: Estadísticas Rápidas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Tus tarjetas de Ventas, Pendientes, etc. */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+           {/* Contenido de stats... */}
+        </div>
+      </div>
+
+      {/* Grid Principal: Calendario y Actividad */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* COLUMNA DEL CALENDARIO (Ocupa 1/3) */}
+        <div className="lg:col-span-1">
+          <div className="bg-white p-2 rounded-2xl shadow-md border border-gray-200">
+            <InteractiveCalendar />
+          </div>
+          
+          {/* Tip de Negocio: Recordatorio de metas para el auto */}
+          <div className="mt-4 p-4 bg-blue-600 text-white rounded-xl shadow-lg">
+            <h4 className="font-semibold text-sm">Meta: Auto de Contado 🚗</h4>
+            <p className="text-xs opacity-90">Faltan 11 meses. ¡Sigue así, Anderson!</p>
+          </div>
+        </div>
+
+        {/* COLUMNA DE ÚLTIMAS COTIZACIONES (Ocupa 2/3) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <FileText className="text-blue-500" /> Cotizaciones Recientes
+          </h3>
+          {/* Aquí va tu tabla o lista de Drizzle */}
+          <p className="text-gray-400 text-sm">Cargando datos del servidor...</p>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

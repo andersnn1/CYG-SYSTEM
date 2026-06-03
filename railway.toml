@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @workspace/inventario-ventas run build && cd artifacts/api-server && pnpm run build"
+
+[deploy]
+startCommand = "cd artifacts/api-server && node --enable-source-maps ./dist/index.mjs"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

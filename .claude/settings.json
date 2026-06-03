@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Andersn/AppData/Local/Temp/claude/c--Users-Andersn-Desktop-CandG-Electronics/23105122-7bf6-44f7-af26-962e0d2c0511/tasks/**)",
+      "Read(//c/Users/Andersn/AppData/Local/Temp/claude//**)",
+      "Bash(powershell -NoProfile -ExecutionPolicy Bypass -Command '& { $env:PGPASSWORD='\\\\''admin123'\\\\''; psql -h localhost -p 5433 -U postgres -d candg_electronics -c '\\\\''ALTER TABLE perfumery ADD COLUMN IF NOT EXISTS code TEXT; ALTER TABLE sublimation ADD COLUMN IF NOT EXISTS code TEXT;'\\\\'' }')",
+      "Bash(PGPASSWORD=admin123 psql -h localhost -p 5433 -U postgres -d candg_electronics -f lib/db/migrations/0011_add_invoice_id_to_sales.sql)",
+      "Bash(where psql:*)",
+      "Read(//c/Program Files/PostgreSQL//**)",
+      "Read(//c/Program Files//**)",
+      "Read(//c/Program Files \\(x86\\)//**)"
+    ]
+  }
+}

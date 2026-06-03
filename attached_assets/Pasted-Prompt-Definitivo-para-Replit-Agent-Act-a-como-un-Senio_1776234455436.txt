@@ -1,0 +1,44 @@
+Prompt Definitivo para Replit Agent
+"Actúa como un Senior Fullstack Developer. Necesito actualizar el Dashboard y el módulo de Cotizaciones de mi sistema 'C&G Electronics' con los siguientes requerimientos técnicos:
+
+1. Estética y Layout del Dashboard:
+
+Reorganiza la sección principal del Dashboard para que el componente de Calendario y la tabla de Cotizaciones Recientes estén en la misma fila y tengan exactamente la misma altura para una simetría perfecta.
+
+Usa un grid de Tailwind CSS (grid-cols-1 lg:grid-cols-2) con contenedores que tengan el mismo padding, bordes redondeados (rounded-2xl) y sombras consistentes.
+
+2. Actualización de Base de Datos (Drizzle ORM):
+
+Modifica el esquema de la tabla de 'quotes' (cotizaciones) para incluir un nuevo campo llamado scheduled_purchase_date (tipo timestamp o date).
+
+Ejecuta la migración necesaria para que este campo esté disponible en la base de datos PostgreSQL.
+
+3. Módulo de Cotizaciones:
+
+En el formulario de creación y edición de cotizaciones, añade un nuevo selector de fecha etiquetado como "Fecha Programada de Compra".
+
+Asegúrate de que este dato se guarde correctamente en la base de datos.
+
+4. Lógica de Visualización en el Calendario:
+
+El calendario del Dashboard debe consumir los datos de las cotizaciones desde la base de datos.
+
+Resaltado Visual: Si una o más cotizaciones tienen una scheduled_purchase_date que coincide con un día del calendario, ese día debe mostrar un borde amarillo intenso (border-yellow-400) y un indicador visual (como un punto o cambio de peso de fuente).
+
+Usa las modifiers de react-day-picker para implementar este resaltado dinámico.
+
+5. Interacción y Pop-up de Detalles (NUEVO):
+
+Implementa un evento onClick en los días resaltados del calendario.
+
+Al hacer clic en un día que tiene cotizaciones programadas, debe abrirse un Pop-up (Modal o Popover) superpuesto.
+
+Este pop-up debe mostrar una lista limpia de las cotizaciones de ese día, incluyendo: Nombre del Cliente, Monto Total y un botón pequeño para 'Ver Detalle' que redirija a la cotización completa.
+
+El pop-up debe tener un diseño elegante con Tailwind (fondo blanco, shadow-xl, botón para cerrar 'X', y desenfoque de fondo backdrop-blur si es modal).
+
+6. Stack Tecnológico:
+
+Mantén el uso estricto de React, TypeScript, Tailwind CSS, Lucide React y Drizzle ORM.
+
+El código debe ser modular, limpio y manejar correctamente los estados asíncronos y de carga."
