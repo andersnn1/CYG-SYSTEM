@@ -49686,13 +49686,11 @@ var init_src = __esm({
     init_neon_http();
     init_schema2();
     init_schema2();
-    if (!process.env.DATABASE_URL) {
-      throw new Error(
-        "DATABASE_URL must be set. Did you forget to provision a database?"
-      );
-    }
     rawUrl = process.env.DATABASE_URL;
-    connectionString = rawUrl.replace(/^DATABASE_URL=/, "").replace(/^["']|["']$/g, "");
+    if (!rawUrl) {
+      console.warn("DATABASE_URL must be set. Using placeholder for build/compilation phase.");
+    }
+    connectionString = (rawUrl || "postgres://placeholder:placeholder@localhost:5432/placeholder").replace(/^DATABASE_URL=/, "").replace(/^["']|["']$/g, "");
     sql2 = cs(connectionString);
     db = drizzle(sql2, { schema: schema_exports });
   }
