@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "vercel-build": "pnpm --filter @workspace/inventario-ventas run build && pnpm --filter @workspace/api-server exec node ./build-vercel-handler.mjs && rm -rf public && cp -r artifacts/inventario-ventas/dist/public ./public",
+    "vercel-build": "pnpm --filter @workspace/inventario-ventas run build && pnpm --filter @workspace/api-server exec node ./build-vercel-handler.mjs && rm -rf public && cp -r artifacts/inventario-ventas/dist/public ./public && echo '=== ROOT DIR ===' && ls -la && echo '=== PUBLIC DIR ===' && ls -la public",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "push-to-github": "bash scripts/push-to-github.sh"
