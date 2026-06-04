@@ -25,7 +25,7 @@ guias_evidencia/
 
 # Generated Vercel serverless handler map (built during vercel-build)
 api/index.js.map
-artifacts/api-server/api/index.cjs.map
+artifacts/api-server/api/index.js.map
 artifacts/api-server/dist/
 
 # dependencies
