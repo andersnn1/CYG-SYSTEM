@@ -12,7 +12,7 @@ async function buildVercelHandler() {
   // Entry: api/_entry.ts — exports the Express app without calling app.listen()
   const entryPoint = path.resolve(rootDir, "api", "_entry.ts");
   // Output: api/index.js — Vercel picks this up as the serverless function
-  const outfile = path.resolve(artifactDir, "api", "index.js");
+  const outfile = path.resolve(artifactDir, "api", "index.cjs");
 
   await esbuild({
     entryPoints: [entryPoint],
