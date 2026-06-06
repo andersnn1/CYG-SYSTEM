@@ -12,6 +12,6 @@ export type UpdateInvoiceBodyPaymentMethod =
 export const UpdateInvoiceBodyPaymentMethod = {
   efectivo: "efectivo",
   tarjeta: "tarjeta",
-  transferencia: "transferencia",
-  cheque: "cheque",
+  deposito: "deposito",
+  link_pago: "link_pago",
 } as const;

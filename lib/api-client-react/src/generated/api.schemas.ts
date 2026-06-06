@@ -326,6 +326,7 @@ export interface SetMonthlyGoalBody {
 export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
 export const InvoiceStatus = {
+  borrador: "borrador",
   pendiente: "pendiente",
   pagada: "pagada",
   cancelada: "cancelada",
@@ -338,6 +339,17 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+}
+
+export interface InvoicePayment {
+  id: number;
+  invoiceId: number;
+  amount: number;
+  paymentMethod: string;
+  /** @nullable */
+  transferReference?: string | null;
+  paymentDate: string;
+  createdAt: string;
 }
 
 export interface Invoice {
@@ -380,9 +392,20 @@ export interface Invoice {
   fotoGuiaPath?: string | null;
   estadoEntrega: string;
   items?: InvoiceItem[];
+  payments?: InvoicePayment[];
   createdAt: string;
   updatedAt: string;
 }
+
+export type CreateInvoiceBodyStatus =
+  (typeof CreateInvoiceBodyStatus)[keyof typeof CreateInvoiceBodyStatus];
+
+export const CreateInvoiceBodyStatus = {
+  borrador: "borrador",
+  pendiente: "pendiente",
+  pagada: "pagada",
+  cancelada: "cancelada",
+} as const;
 
 export type CreateInvoiceBodyPaymentMethod =
   (typeof CreateInvoiceBodyPaymentMethod)[keyof typeof CreateInvoiceBodyPaymentMethod];
@@ -390,8 +413,8 @@ export type CreateInvoiceBodyPaymentMethod =
 export const CreateInvoiceBodyPaymentMethod = {
   efectivo: "efectivo",
   tarjeta: "tarjeta",
-  transferencia: "transferencia",
-  cheque: "cheque",
+  deposito: "deposito",
+  link_pago: "link_pago",
 } as const;
 
 export type CreateInvoiceItemBodyProductType =
@@ -423,6 +446,7 @@ export interface CreateInvoiceBody {
   tax?: number;
   notes?: string;
   clientRtn?: string;
+  status?: CreateInvoiceBodyStatus;
   paymentMethod?: CreateInvoiceBodyPaymentMethod;
   transferReference?: string;
   issueDate: string;
@@ -444,6 +468,7 @@ export type UpdateInvoiceBodyStatus =
   (typeof UpdateInvoiceBodyStatus)[keyof typeof UpdateInvoiceBodyStatus];
 
 export const UpdateInvoiceBodyStatus = {
+  borrador: "borrador",
   pendiente: "pendiente",
   pagada: "pagada",
   cancelada: "cancelada",
@@ -455,8 +480,8 @@ export type UpdateInvoiceBodyPaymentMethod =
 export const UpdateInvoiceBodyPaymentMethod = {
   efectivo: "efectivo",
   tarjeta: "tarjeta",
-  transferencia: "transferencia",
-  cheque: "cheque",
+  deposito: "deposito",
+  link_pago: "link_pago",
 } as const;
 
 export interface UpdateInvoiceBody {

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { sql, and, eq, isNotNull } from "drizzle-orm";
-import { db, salesTable, perfumeryTable, sublimationTable, clientsTable, expensesTable, invoicesTable, monthlyGoalsTable, quotesTable } from "@workspace/db";
+import { db, salesTable, perfumeryTable, sublimationTable, clientsTable, expensesTable, invoicesTable, monthlyGoalsTable, quotesTable, accountsTable, journalEntriesTable, journalLinesTable } from "@workspace/db";
 import { GetSalesChartQueryParams } from "@workspace/api-zod";
 import { z } from "zod";
 
@@ -11,22 +11,70 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  const salesResult = await db.select({
-    totalIncome: sql<number>`COALESCE(SUM(${salesTable.totalAmount}), 0)`,
-    totalCost: sql<number>`COALESCE(SUM(${salesTable.costPrice} * ${salesTable.quantity}), 0)`,
-    totalShipping: sql<number>`COALESCE(SUM(${salesTable.shippingCost}), 0)`,
-    netProfit: sql<number>`COALESCE(SUM(${salesTable.netProfit}), 0)`,
-    totalSales: sql<number>`COUNT(*)`,
-  }).from(salesTable);
+  const queryMonth = req.query.month ? String(req.query.month) : null;
+  const queryYear = req.query.year ? String(req.query.year) : null;
 
-  const totalIncome = Number(salesResult[0]?.totalIncome ?? 0);
-  const totalCost = Number(salesResult[0]?.totalCost ?? 0);
+  let filterMonth: number | null = currentMonth;
+  let filterYear: number | null = currentYear;
+  let isAllTime = false;
+
+  if (queryMonth === "all") {
+    isAllTime = true;
+    filterMonth = null;
+    filterYear = null;
+  } else {
+    if (queryMonth) filterMonth = parseInt(queryMonth);
+    if (queryYear) filterYear = parseInt(queryYear);
+    if (isNaN(filterMonth as number) || filterMonth === null) filterMonth = currentMonth;
+    if (isNaN(filterYear as number) || filterYear === null) filterYear = currentYear;
+  }
+
+  // 1. Sales Query (to get number of sales transactions and shipping cost)
+  let salesQuery = db.select({
+    totalShipping: sql<number>`COALESCE(SUM(${salesTable.shippingCost}), 0)`,
+    totalSales: sql<number>`COUNT(*)`,
+  }).from(salesTable).$dynamic();
+
+  if (!isAllTime) {
+    salesQuery = salesQuery.where(
+      and(
+        sql`EXTRACT(MONTH FROM ${salesTable.saleDate}) = ${filterMonth}`,
+        sql`EXTRACT(YEAR FROM ${salesTable.saleDate}) = ${filterYear}`
+      )
+    );
+  }
+  const salesResult = await salesQuery;
   const totalShipping = Number(salesResult[0]?.totalShipping ?? 0);
-  const netProfit = Number(salesResult[0]?.netProfit ?? 0);
   const totalSales = Number(salesResult[0]?.totalSales ?? 0);
 
+  // 2. Real Net Income Query from Journal Entries (Partida Doble)
+  let journalFilter = sql`1=1`;
+  if (!isAllTime) {
+    journalFilter = sql`EXTRACT(MONTH FROM ${journalEntriesTable.date}::date) = ${filterMonth} AND EXTRACT(YEAR FROM ${journalEntriesTable.date}::date) = ${filterYear}`;
+  }
+
+  const [netIncomeResult] = await db
+    .select({
+      revenue: sql<number>`COALESCE(SUM(CASE WHEN ${accountsTable.type} = 'Revenue' THEN ${journalLinesTable.credit} - ${journalLinesTable.debit} ELSE 0 END), 0)`,
+      expense: sql<number>`COALESCE(SUM(CASE WHEN ${accountsTable.type} = 'Expense' THEN ${journalLinesTable.debit} - ${journalLinesTable.credit} ELSE 0 END), 0)`,
+    })
+    .from(journalLinesTable)
+    .innerJoin(accountsTable, eq(journalLinesTable.accountId, accountsTable.id))
+    .innerJoin(journalEntriesTable, eq(journalLinesTable.journalEntryId, journalEntriesTable.id))
+    .where(journalFilter);
+
+  const realTotalRevenue = Number(netIncomeResult?.revenue ?? 0);
+  const realTotalExpense = Number(netIncomeResult?.expense ?? 0);
+  const realNetIncome = realTotalRevenue - realTotalExpense;
+
+  const totalIncome = realTotalRevenue;
+  const totalCost = realTotalExpense;
+  const netProfit = realNetIncome;
+  const distributableProfit = realNetIncome;
+  const monthlyExpenses = realTotalExpense;
+  const monthlySales = realTotalRevenue;
+
   const fondoReposicion = totalCost;
-  const distributableProfit = netProfit;
 
   const [clientsResult] = await db.select({ count: sql<number>`COUNT(*)` }).from(clientsTable);
   const totalClients = Number(clientsResult?.count ?? 0);
@@ -43,37 +91,37 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     ganancia: distributableProfit * 0.10,
   };
 
-  // Monthly expenses
-  const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
-  const endDate = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0];
-
-  const [expensesResult] = await db.select({
-    total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
-  }).from(expensesTable)
-    .where(
-      sql`${expensesTable.expenseDate} >= ${startDate} AND ${expensesTable.expenseDate} <= ${endDate}`
-    );
-  const monthlyExpenses = Number(expensesResult?.total ?? 0);
-
-  // Monthly invoices sales (status != cancelada)
-  const [invoiceSalesResult] = await db.select({
-    total: sql<number>`COALESCE(SUM(${invoicesTable.total}), 0)`,
+  // 3. Owner payout from invoices (status != cancelada)
+  let invoicePayoutQuery = db.select({
     ownerPayout: sql<number>`COALESCE(SUM(${invoicesTable.ownerPayout}), 0)`,
     partnerPayout: sql<number>`COALESCE(SUM(${invoicesTable.partnerPayout}), 0)`,
-  }).from(invoicesTable)
-    .where(
-      sql`${invoicesTable.status} != 'cancelada' AND EXTRACT(MONTH FROM ${invoicesTable.issueDate}::date) = ${currentMonth} AND EXTRACT(YEAR FROM ${invoicesTable.issueDate}::date) = ${currentYear}`
-    );
-  const monthlySales = Number(invoiceSalesResult?.total ?? 0);
-  const monthlyRealProfit = Number(invoiceSalesResult?.ownerPayout ?? 0);
-  const monthlyPartnerProfit = Number(invoiceSalesResult?.partnerPayout ?? 0);
+  }).from(invoicesTable).$dynamic();
 
-  // Monthly goal
+  if (!isAllTime) {
+    invoicePayoutQuery = invoicePayoutQuery.where(
+      and(
+        sql`${invoicesTable.status} != 'cancelada'`,
+        sql`EXTRACT(MONTH FROM ${invoicesTable.issueDate}::date) = ${filterMonth}`,
+        sql`EXTRACT(YEAR FROM ${invoicesTable.issueDate}::date) = ${filterYear}`
+      )
+    );
+  } else {
+    invoicePayoutQuery = invoicePayoutQuery.where(
+      sql`${invoicesTable.status} != 'cancelada'`
+    );
+  }
+  const [invoicePayoutResult] = await invoicePayoutQuery;
+  const monthlyRealProfit = Number(invoicePayoutResult?.ownerPayout ?? 0);
+  const monthlyPartnerProfit = Number(invoicePayoutResult?.partnerPayout ?? 0);
+
+  // 4. Monthly Goal Query
+  const goalMonth = isAllTime ? currentMonth : filterMonth;
+  const goalYear = isAllTime ? currentYear : filterYear;
   const [goalResult] = await db.select().from(monthlyGoalsTable)
     .where(
       and(
-        eq(monthlyGoalsTable.month, currentMonth),
-        eq(monthlyGoalsTable.year, currentYear)
+        eq(monthlyGoalsTable.month, goalMonth!),
+        eq(monthlyGoalsTable.year, goalYear!)
       )
     );
   const monthlyGoal = goalResult ? Number(goalResult.targetAmount) : null;

@@ -17,6 +17,7 @@ import Facturas from "@/pages/facturas";
 import Gastos from "@/pages/gastos";
 import Cotizaciones from "@/pages/cotizaciones";
 import Combos from "@/pages/combos";
+import Contabilidad from "@/pages/contabilidad";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,9 +40,14 @@ function Router() {
         <Route path="/ventas" component={Ventas} />
         <Route path="/reportes" component={Reportes} />
         <Route path="/facturas" component={Facturas} />
+        <Route path="/facturas/nueva" component={Facturas} />
+        <Route path="/facturas/editar/:id" component={Facturas} />
         <Route path="/gastos" component={Gastos} />
         <Route path="/cotizaciones" component={Cotizaciones} />
+        <Route path="/cotizaciones/nueva" component={Cotizaciones} />
+        <Route path="/cotizaciones/editar/:id" component={Cotizaciones} />
         <Route path="/combos" component={Combos} />
+        <Route path="/contabilidad" component={Contabilidad} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -17,6 +17,11 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useSwipe } from "@/hooks/use-swipe";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { downloadPdfFromHtml } from "@/lib/pdf";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,9 +65,11 @@ interface ProductOption {
   id: number;
   label: string;
   price: number;
-  type: "perfumeria" | "sublimacion";
+  type: "perfumeria" | "sublimacion" | "combo";
   code?: string | null;
   stock: number;
+  comboItems?: any[];
+  fixedPrice?: number | null;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -108,7 +115,7 @@ function StatusBadge({ status }: { status: Quote["status"] }) {
 // ─── Print helpers ─────────────────────────────────────────────────────────────
 
 function buildQuoteHtml(quote: Quote): string {
-  const BLUE = "#4472C4";
+  const BLUE = "#2563EB";
   const subtotal = Number(quote.subtotal);
   const discount = Number(quote.discount);
   const tax      = Number(quote.tax);
@@ -238,46 +245,10 @@ async function downloadQuotePdf(
 ) {
   onStart();
   try {
-    const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-      import("jspdf"),
-      import("html2canvas"),
-    ]);
-
     const html = buildQuoteHtml(quote);
-
-    // Render HTML in a hidden fixed iframe (same origin → html2canvas works)
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText =
-      "position:fixed;left:-9999px;top:0;width:816px;height:1056px;visibility:hidden;border:none;";
-    document.body.appendChild(iframe);
-
-    try {
-      const doc = iframe.contentDocument!;
-      doc.open();
-      doc.write(html);
-      doc.close();
-
-      // Allow images (logo) time to load before capture
-      await new Promise(r => setTimeout(r, 900));
-
-      const canvas = await html2canvas(doc.body, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        width: 816,
-        height: 1056,
-        windowWidth: 816,
-        windowHeight: 1056,
-        backgroundColor: "#ffffff",
-      });
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
-      pdf.addImage(imgData, "JPEG", 0, 0, 216, 279);
-      pdf.save(`cotizacion-${quote.quoteNumber}.pdf`);
-    } finally {
-      document.body.removeChild(iframe);
-    }
+    await downloadPdfFromHtml(html, `cotizacion-${quote.quoteNumber}.pdf`);
+  } catch (err: any) {
+    console.error("Error generating PDF", err);
   } finally {
     onDone();
   }
@@ -309,7 +280,7 @@ function QuotePrintView({ quote }: { quote: Quote }) {
   const discount = Number(quote.discount);
   const tax = Number(quote.tax);
   const total = Number(quote.total);
-  const BLUE = "#4472C4";
+  const BLUE = "#2563EB";
 
   return (
     <div
@@ -479,7 +450,7 @@ function QuotePrintModal({ quote, onPrint, onClose, onDownload, downloading }: {
             }
             Descargar PDF
           </button>
-          <button onClick={onPrint} style={{ ...btnBase, background: "#4472C4", color: "#fff" }}>
+          <button onClick={onPrint} style={{ ...btnBase, background: "#2563EB", color: "#fff" }}>
             <Printer size={14} /> Imprimir
           </button>
           <button onClick={onClose} style={{ ...btnBase, background: "transparent", color: "#94a3b8", border: "1px solid #334155" }}>
@@ -506,7 +477,7 @@ type ItemForm = {
   quantity: number;
   unitPrice: number;
   productId?: number;
-  productType?: "perfumeria" | "sublimacion";
+  productType?: "perfumeria" | "sublimacion" | "combo";
 };
 
 type QuoteForm = {
@@ -549,17 +520,42 @@ export default function Cotizaciones() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: clients } = useListClients();
-  const [, navigate] = useLocation();
+  const [location, setLocation] = useLocation();
+  const isMobile = useIsMobile();
 
-  const [view, setView] = useState<"list" | "form">("list");
+  const isCreate = location === "/cotizaciones/nueva";
+  const editMatch = location.match(/^\/cotizaciones\/editar\/(\d+)$/);
+  const editingId = editMatch ? Number(editMatch[1]) : null;
+  const view = (isCreate || editingId) ? "form" : "list";
+
+  // Mock navigate / setView / setEditingId for backward compatibility
+  const navigate = setLocation;
+  const setView = (v: "list" | "form") => {
+    if (v === "list") {
+      setLocation("/cotizaciones");
+    } else {
+      setLocation("/cotizaciones/nueva");
+    }
+  };
+  const setEditingId = (id: number | null) => {
+    if (id === null) {
+      setLocation("/cotizaciones");
+    } else {
+      setLocation(`/cotizaciones/editar/${id}`);
+    }
+  };
 
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
+  const { isPulling, ...pullHandlers } = usePullToRefresh(async () => {
+    await loadQuotes();
+  });
+
+  const swipeHandlers = useSwipe(undefined, () => setLocation("/cotizaciones"));
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<QuoteForm>(defaultForm());
   const [showAddress, setShowAddress] = useState(false);
 
@@ -621,9 +617,10 @@ export default function Cotizaciones() {
   useEffect(() => {
     async function loadProducts() {
       try {
-        const [perf, sub] = await Promise.all([
+        const [perf, sub, combos] = await Promise.all([
           apiFetch("/perfumery"),
           apiFetch("/sublimation"),
+          apiFetch("/combos"),
         ]);
         const perfOpts: ProductOption[] = (Array.isArray(perf) ? perf : []).map((p: any) => ({
           id: p.id,
@@ -641,7 +638,17 @@ export default function Cotizaciones() {
           code: s.code ?? null,
           stock: Number(s.stock ?? 0),
         }));
-        setProducts([...perfOpts, ...subOpts]);
+        const comboOpts: ProductOption[] = (Array.isArray(combos) ? combos : []).map((c: any) => ({
+          id: c.id,
+          label: c.name,
+          price: c.fixedPrice != null ? Number(c.fixedPrice) : c.items.reduce((sum: number, it: any) => sum + Number(it.unitPrice), 0),
+          type: "combo" as const,
+          code: c.code ?? null,
+          stock: 999,
+          comboItems: c.items,
+          fixedPrice: c.fixedPrice != null ? Number(c.fixedPrice) : null,
+        }));
+        setProducts([...perfOpts, ...subOpts, ...comboOpts]);
       } catch { /* products unavailable */ }
     }
     loadProducts();
@@ -722,51 +729,66 @@ export default function Cotizaciones() {
     convertida: quotes.filter(q => q.status === "convertida").length,
   };
 
+  useEffect(() => {
+    if (editingId) {
+      async function loadEditingQuote() {
+        try {
+          const full: Quote = await apiFetch(`/quotes/${editingId}`);
+          setForm({
+            clientId:         String(full.clientId ?? ""),
+            clientName:       full.clientName,
+            clientPhone:      full.clientPhone ?? "",
+            clientEmail:      full.clientEmail ?? "",
+            clientAddress:    full.clientAddress ?? "",
+            clientCity:       full.clientCity ?? "",
+            clientDepartment: full.clientDepartment ?? "",
+            clientRtn:        full.clientRtn ?? "",
+            paymentMethod:    (full.paymentMethod as QuoteForm["paymentMethod"]) ?? "efectivo",
+            discount:         full.discount,
+            tax:              full.tax,
+            notes:            full.notes ?? "",
+            issueDate:              full.issueDate,
+            validUntil:             full.validUntil ?? "",
+            scheduledPurchaseDate:  full.scheduledPurchaseDate ?? "",
+            items:            full.items?.map(it => ({
+              description: it.description,
+              quantity:    it.quantity,
+              unitPrice:   it.unitPrice,
+            })) ?? [],
+          });
+          setShowAddress(!!(full.clientAddress || full.clientCity || full.clientDepartment));
+          setClientSearch(full.clientName);
+          setItemSearch({});
+          setItemDropOpen({});
+        } catch (e: any) {
+          toast({ title: "Error", description: e.message, variant: "destructive" });
+          setLocation("/cotizaciones");
+        }
+      }
+      loadEditingQuote();
+    }
+  }, [editingId]);
+
   const openCreate = () => {
     setForm(defaultForm());
-    setEditingId(null);
     setShowAddress(false);
     setClientSearch("");
     setItemSearch({});
     setItemDropOpen({});
-    setView("form");
+    setLocation("/cotizaciones/nueva");
   };
 
-  const openEdit = async (q: Quote) => {
-    try {
-      const full: Quote = await apiFetch(`/quotes/${q.id}`);
-      setForm({
-        clientId:         String(full.clientId ?? ""),
-        clientName:       full.clientName,
-        clientPhone:      full.clientPhone ?? "",
-        clientEmail:      full.clientEmail ?? "",
-        clientAddress:    full.clientAddress ?? "",
-        clientCity:       full.clientCity ?? "",
-        clientDepartment: full.clientDepartment ?? "",
-        clientRtn:        full.clientRtn ?? "",
-        paymentMethod:    (full.paymentMethod as QuoteForm["paymentMethod"]) ?? "efectivo",
-        discount:         full.discount,
-        tax:              full.tax,
-        notes:            full.notes ?? "",
-        issueDate:              full.issueDate,
-        validUntil:             full.validUntil ?? "",
-        scheduledPurchaseDate:  full.scheduledPurchaseDate ?? "",
-        items:            full.items?.map(it => ({
-          description: it.description,
-          quantity:    it.quantity,
-          unitPrice:   it.unitPrice,
-        })) ?? [],
-      });
-      setEditingId(full.id);
-      setShowAddress(!!(full.clientAddress || full.clientCity || full.clientDepartment));
-      setClientSearch(full.clientName);
-      setItemSearch({});
-      setItemDropOpen({});
-      setView("form");
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    }
+  const openEdit = (q: Quote) => {
+    setLocation(`/cotizaciones/editar/${q.id}`);
   };
+
+  useEffect(() => {
+    (window as any).__openNewQuote = openCreate;
+    return () => {
+      delete (window as any).__openNewQuote;
+    };
+  }, []);
+
 
   const selectClient = (client: Client) => {
     setForm(f => ({
@@ -786,9 +808,26 @@ export default function Cotizaciones() {
   const selectProduct = (itemIndex: number, product: ProductOption, initialQuantity?: number) => {
     setForm(f => {
       const items = [...f.items];
+      const quantityPrefix = initialQuantity ?? (items[itemIndex]?.quantity || 1);
+      
+      if (product.type === "combo" && product.comboItems) {
+        const expandedItems = product.comboItems.map((ci: any) => ({
+          description: ci.productName,
+          quantity: ci.quantity * quantityPrefix,
+          unitPrice: product.fixedPrice != null
+            ? product.fixedPrice / product.comboItems!.length
+            : (ci.unitPrice ?? 0),
+          productId: ci.productId,
+          productType: ci.productType,
+        }));
+        const newItems = [...items.slice(0, itemIndex), ...expandedItems, ...items.slice(itemIndex + 1)];
+        return { ...f, items: newItems };
+      }
+
       items[itemIndex] = {
-        ...items[itemIndex],
+        ...(items[itemIndex] || {}),
         description: product.label,
+        quantity:    quantityPrefix,
         unitPrice:   product.price,
         productId:   product.id,
         productType: product.type,
@@ -985,7 +1024,12 @@ export default function Cotizaciones() {
   // ─── LIST VIEW ───────────────────────────────────────────────────────────────
   if (view === "list") {
     return (
-      <div className="space-y-5 animate-in fade-in duration-200">
+      <div className="space-y-5 animate-in fade-in duration-200" {...(isMobile ? pullHandlers : {})}>
+        {isMobile && isPulling && (
+          <div className="flex justify-center py-2 animate-in fade-in">
+            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
         {/* Top bar */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -1302,6 +1346,194 @@ export default function Cotizaciones() {
 
   // ─── FORM VIEW ────────────────────────────────────────────────────────────────
   const currentStatus = editingQuote?.status ?? "pendiente";
+
+  if (isMobile) {
+    return (
+      <div {...swipeHandlers} className="flex flex-col min-h-[calc(100vh-4rem)] bg-background animate-in fade-in duration-200">
+        {/* Header */}
+        <header className="flex items-center justify-between border-b pb-3 mb-4 sticky top-0 bg-background z-20 pt-1">
+          <Button variant="ghost" size="sm" className="h-9 gap-1 px-0 text-muted-foreground font-semibold cursor-pointer" onClick={() => { setLocation("/cotizaciones"); setForm(defaultForm()); }}>
+            <ArrowLeft className="h-4 w-4" /> Volver
+          </Button>
+          <div className="text-center flex-1">
+            <h1 className="font-bold text-sm uppercase">{editingId ? (editingQuote?.quoteNumber ?? "Cotización") : "Nueva Cotización"}</h1>
+            <p className="text-[8px] font-black text-muted-foreground tracking-widest uppercase">Móvil</p>
+          </div>
+          {editingId && editingQuote && (
+            <StatusBadge status={editingQuote.status} />
+          )}
+        </header>
+
+        {/* Selected Client Card */}
+        <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-3.5 flex justify-between items-center mb-4">
+          <div className="min-w-0">
+            <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block mb-0.5">Cliente</span>
+            <span className="text-sm font-bold text-foreground truncate block">{form.clientName || "Consumidor Final"}</span>
+            {form.clientPhone && <span className="text-[10px] text-muted-foreground font-medium block mt-0.5">{form.clientPhone}</span>}
+          </div>
+          <div className="relative" ref={clientRef}>
+            <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase shrink-0 border-blue-500/30 text-blue-600 cursor-pointer" onClick={() => setClientDropOpen(v => !v)}>
+              Cambiar
+            </Button>
+            {clientDropOpen && (
+              <div className="absolute right-0 top-10 z-50 w-64 bg-card border rounded-lg shadow-xl max-h-48 overflow-y-auto p-1">
+                <Input 
+                  className="h-8 text-xs mb-1" 
+                  placeholder="Filtrar clientes..." 
+                  value={clientSearch}
+                  onChange={e => setClientSearch(e.target.value)}
+                />
+                {(Array.isArray(clients) ? clients : [])
+                  .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                  .map(c => (
+                    <button key={c.id} className="w-full text-left px-2 py-1.5 hover:bg-muted text-xs rounded truncate block" onClick={() => selectClient(c)}>
+                      {c.name}
+                    </button>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Summary Banner */}
+        <div className="bg-slate-950 dark:bg-card border text-white p-4 rounded-xl shadow-md flex justify-between items-center mb-4">
+          <div className="space-y-0.5">
+            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Total Cotizado</span>
+            <div className="text-2xl font-black font-mono tracking-tight tabular-nums">{formatCurrency(total)}</div>
+          </div>
+          <div className="text-right text-[10px] text-slate-400 font-medium">
+            <div>Items: {form.items.length}</div>
+            <div>Subtotal: {formatCurrency(subtotal)}</div>
+          </div>
+        </div>
+
+        {/* Form fields scrollable */}
+        <div className="flex-1 space-y-4 pb-32">
+          <div className="bg-card border rounded-xl p-4 space-y-4">
+            <h3 className="font-bold text-xs uppercase text-muted-foreground border-b pb-2">Información del Cliente</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">Nombre</Label>
+                  <Input className="h-9 text-xs" value={form.clientName} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">Teléfono</Label>
+                  <Input type="tel" inputMode="tel" className="h-9 text-xs" value={form.clientPhone} onChange={e => setForm(f => ({ ...f, clientPhone: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">RTN</Label>
+                  <Input className="h-9 text-xs" value={form.clientRtn} onChange={e => setForm(f => ({ ...f, clientRtn: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">Email</Label>
+                  <Input className="h-9 text-xs" value={form.clientEmail} onChange={e => setForm(f => ({ ...f, clientEmail: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border rounded-xl p-4 space-y-4">
+            <h3 className="font-bold text-xs uppercase text-muted-foreground border-b pb-2">Fechas &amp; Valores</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">Emisión</Label>
+                  <Input type="date" className="h-9 font-bold text-xs" value={form.issueDate} onChange={e => setForm(f => ({ ...f, issueDate: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">Validez</Label>
+                  <Input type="date" className="h-9 font-bold text-xs" value={form.validUntil} onChange={e => setForm(f => ({ ...f, validUntil: e.target.value }))} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[9px] font-black uppercase text-slate-500">Compra Programada</Label>
+                <Input type="date" className="h-9 font-bold text-xs" value={form.scheduledPurchaseDate} onChange={e => setForm(f => ({ ...f, scheduledPurchaseDate: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">Descuento</Label>
+                  <Input type="number" inputMode="decimal" className="h-9 font-bold text-xs text-right" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase text-slate-500">ISV (15%)</Label>
+                  <Input type="number" inputMode="decimal" className="h-9 font-bold text-xs text-right" value={form.tax} onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card border rounded-xl p-4 space-y-4">
+            <h3 className="font-bold text-xs uppercase text-muted-foreground border-b pb-2">Líneas de Cotización</h3>
+            <div className="space-y-4 divide-y">
+              {form.items.map((it, i) => (
+                <div key={i} className="pt-3 first:pt-0 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black font-mono text-muted-foreground/60">Línea #{i + 1}</span>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0 cursor-pointer" onClick={() => removeItem(i)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="relative">
+                    <Input 
+                      className="h-9 text-xs font-semibold" 
+                      placeholder="Buscar producto..." 
+                      value={itemSearch[i] || ""} 
+                      onChange={e => {
+                        setItemSearch(s => ({ ...s, [i]: e.target.value }));
+                        setItemDropOpen(s => ({ ...s, [i]: true }));
+                      }}
+                    />
+                    {itemDropOpen[i] && (
+                      <div className="absolute left-0 right-0 top-10 z-50 bg-card border rounded-lg shadow-xl max-h-48 overflow-y-auto p-1">
+                        {products
+                          .filter(p => !itemSearch[i] || p.label.toLowerCase().includes(itemSearch[i].toLowerCase()) || p.code?.toLowerCase().includes(itemSearch[i].toLowerCase()))
+                          .map(p => (
+                            <button key={p.id} className="w-full text-left px-2 py-1.5 hover:bg-muted text-xs rounded truncate block" onClick={() => selectProduct(i, p)}>
+                              {p.label} - {formatCurrency(p.price)} (Stock: {p.stock})
+                            </button>
+                          ))
+                        }
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Label className="text-[8px] font-black uppercase text-slate-500">Cantidad</Label>
+                      <Input type="number" inputMode="decimal" className="h-9 font-mono font-bold text-xs text-center" value={it.quantity} onChange={e => updateItem(i, "quantity", Number(e.target.value))} />
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-[8px] font-black uppercase text-slate-500">Precio Unitario</Label>
+                      <Input type="number" inputMode="decimal" className="h-9 font-mono font-bold text-xs text-right" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", Number(e.target.value))} />
+                    </div>
+                    <div className="flex-1 flex flex-col justify-end items-end pb-1.5 font-black font-mono text-xs text-primary">
+                      {formatCurrency(it.quantity * it.unitPrice)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" className="w-full h-9.5 gap-1.5 border-dashed border-primary/30 text-primary uppercase font-bold text-[10px] cursor-pointer" onClick={addItem}>
+              <Plus className="h-3.5 w-3.5" /> Añadir Fila
+            </Button>
+          </div>
+        </div>
+
+        {/* Bottom Actions Floating Bar */}
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 z-30 grid grid-cols-2 gap-2 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] safe-area-bottom">
+          <Button variant="outline" className="h-11 text-xs font-bold uppercase cursor-pointer" onClick={() => { setLocation("/cotizaciones"); setForm(defaultForm()); }}>
+            Cancelar
+          </Button>
+          <Button className="h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase shadow-md cursor-pointer" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Guardando..." : "Guardar Cotización"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-200 space-y-6 pb-16">
@@ -1623,9 +1855,13 @@ export default function Cotizaciones() {
                               <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
                                 idx === (highlightedItemIndex[i] || 0) 
                                   ? "bg-white/20 text-white" 
-                                  : (p.type === "perfumeria" ? "bg-purple-100 text-purple-700" : "bg-cyan-100 text-cyan-700")
+                                  : (p.type === "perfumeria" 
+                                      ? "bg-purple-100 text-purple-700" 
+                                      : p.type === "combo"
+                                        ? "bg-amber-100 text-amber-700 border border-amber-300"
+                                        : "bg-cyan-100 text-cyan-700")
                               }`}>
-                                {p.type === "perfumeria" ? "Perf." : "Sub."}
+                                {p.type === "perfumeria" ? "Perf." : p.type === "combo" ? "Combo" : "Sub."}
                               </span>
                               <span className="truncate font-medium">{p.label}</span>
                             </div>

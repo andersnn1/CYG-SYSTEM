@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InvoiceItem } from "./invoiceItem";
+import type { InvoicePayment } from "./invoicePayment";
 import type { InvoiceStatus } from "./invoiceStatus";
 
 export interface Invoice {
@@ -48,6 +49,7 @@ export interface Invoice {
   fotoGuiaPath?: string | null;
   estadoEntrega: string;
   items?: InvoiceItem[];
-  createdAt: string;
-  updatedAt: string;
+  payments?: InvoicePayment[];
+  createdAt: Date;
+  updatedAt: Date;
 }

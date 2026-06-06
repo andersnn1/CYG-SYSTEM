@@ -211,3 +211,38 @@
     width: 100% !important;
   }
 }
+
+/* Safe area para iPhones con notch/Dynamic Island */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* El bottom nav ya tiene esta clase, solo verificar que funcione */
+nav.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevenir zoom involuntario en iOS al hacer focus en inputs */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="date"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch targets mínimos (WCAG 2.1 AA) */
+button, [role="button"], a {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scroll suave en iOS */
+.overflow-y-auto, .overflow-y-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+

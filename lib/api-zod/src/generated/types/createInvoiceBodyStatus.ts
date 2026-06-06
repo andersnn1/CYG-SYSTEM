@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdateInvoiceBodyStatus =
-  (typeof UpdateInvoiceBodyStatus)[keyof typeof UpdateInvoiceBodyStatus];
+export type CreateInvoiceBodyStatus =
+  (typeof CreateInvoiceBodyStatus)[keyof typeof CreateInvoiceBodyStatus];
 
-export const UpdateInvoiceBodyStatus = {
+export const CreateInvoiceBodyStatus = {
   borrador: "borrador",
   pendiente: "pendiente",
   pagada: "pagada",

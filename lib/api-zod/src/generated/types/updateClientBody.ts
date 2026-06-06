@@ -16,4 +16,6 @@ export interface UpdateClientBody {
   department?: string;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  rtn?: string | null;
 }

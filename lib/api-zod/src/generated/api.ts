@@ -585,7 +585,7 @@ export const ListInvoicesResponseItem = zod.object({
   clientAddress: zod.string().nullish(),
   clientCity: zod.string().nullish(),
   clientDepartment: zod.string().nullish(),
-  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]),
   subtotal: zod.number(),
   discount: zod.number(),
   tax: zod.number(),
@@ -612,8 +612,21 @@ export const ListInvoicesResponseItem = zod.object({
       }),
     )
     .optional(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
+  payments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        amount: zod.number(),
+        paymentMethod: zod.string(),
+        transferReference: zod.string().nullish(),
+        paymentDate: zod.string(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
 });
 export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
 
@@ -632,8 +645,9 @@ export const CreateInvoiceBody = zod.object({
   tax: zod.number().optional(),
   notes: zod.string().optional(),
   clientRtn: zod.string().optional(),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]).optional(),
   paymentMethod: zod
-    .enum(["efectivo", "tarjeta", "transferencia", "cheque"])
+    .enum(["efectivo", "tarjeta", "deposito", "link_pago"])
     .optional(),
   transferReference: zod.string().optional(),
   issueDate: zod.string(),
@@ -676,7 +690,7 @@ export const GetInvoiceResponse = zod.object({
   clientAddress: zod.string().nullish(),
   clientCity: zod.string().nullish(),
   clientDepartment: zod.string().nullish(),
-  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]),
   subtotal: zod.number(),
   discount: zod.number(),
   tax: zod.number(),
@@ -703,8 +717,21 @@ export const GetInvoiceResponse = zod.object({
       }),
     )
     .optional(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
+  payments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        amount: zod.number(),
+        paymentMethod: zod.string(),
+        transferReference: zod.string().nullish(),
+        paymentDate: zod.string(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
 });
 
 /**
@@ -715,7 +742,7 @@ export const UpdateInvoiceParams = zod.object({
 });
 
 export const UpdateInvoiceBody = zod.object({
-  status: zod.enum(["pendiente", "pagada", "cancelada"]).optional(),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]).optional(),
   clientName: zod.string().optional(),
   clientPhone: zod.string().optional(),
   clientEmail: zod.string().optional(),
@@ -727,7 +754,7 @@ export const UpdateInvoiceBody = zod.object({
   notes: zod.string().optional(),
   clientRtn: zod.string().optional(),
   paymentMethod: zod
-    .enum(["efectivo", "tarjeta", "transferencia", "cheque"])
+    .enum(["efectivo", "tarjeta", "deposito", "link_pago"])
     .optional(),
   transferReference: zod.string().optional(),
   issueDate: zod.string().optional(),
@@ -767,7 +794,7 @@ export const UpdateInvoiceResponse = zod.object({
   clientAddress: zod.string().nullish(),
   clientCity: zod.string().nullish(),
   clientDepartment: zod.string().nullish(),
-  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]),
   subtotal: zod.number(),
   discount: zod.number(),
   tax: zod.number(),
@@ -794,8 +821,21 @@ export const UpdateInvoiceResponse = zod.object({
       }),
     )
     .optional(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
+  payments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        amount: zod.number(),
+        paymentMethod: zod.string(),
+        transferReference: zod.string().nullish(),
+        paymentDate: zod.string(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
 });
 
 /**
@@ -828,7 +868,7 @@ export const UploadInvoiceGuiaResponse = zod.object({
   clientAddress: zod.string().nullish(),
   clientCity: zod.string().nullish(),
   clientDepartment: zod.string().nullish(),
-  status: zod.enum(["pendiente", "pagada", "cancelada"]),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]),
   subtotal: zod.number(),
   discount: zod.number(),
   tax: zod.number(),
@@ -855,6 +895,80 @@ export const UploadInvoiceGuiaResponse = zod.object({
       }),
     )
     .optional(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
+  payments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        amount: zod.number(),
+        paymentMethod: zod.string(),
+        transferReference: zod.string().nullish(),
+        paymentDate: zod.string(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Cancel a submitted invoice and revert its effects
+ */
+export const CancelInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CancelInvoiceResponse = zod.object({
+  id: zod.number(),
+  invoiceNumber: zod.string(),
+  clientId: zod.number().nullish(),
+  clientName: zod.string(),
+  clientPhone: zod.string().nullish(),
+  clientEmail: zod.string().nullish(),
+  clientAddress: zod.string().nullish(),
+  clientCity: zod.string().nullish(),
+  clientDepartment: zod.string().nullish(),
+  status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]),
+  subtotal: zod.number(),
+  discount: zod.number(),
+  tax: zod.number(),
+  total: zod.number(),
+  notes: zod.string().nullish(),
+  clientRtn: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  transferReference: zod.string().nullish(),
+  issueDate: zod.string(),
+  dueDate: zod.string().nullish(),
+  numeroGuia: zod.string().nullish(),
+  transportista: zod.string().nullish(),
+  fotoGuiaPath: zod.string().nullish(),
+  estadoEntrega: zod.string(),
+  items: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number(),
+      }),
+    )
+    .optional(),
+  payments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        invoiceId: zod.number(),
+        amount: zod.number(),
+        paymentMethod: zod.string(),
+        transferReference: zod.string().nullish(),
+        paymentDate: zod.string(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
 });

@@ -17,6 +17,8 @@ export interface Client {
   department: string;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  rtn?: string | null;
   createdAt: string;
   updatedAt: string;
 }

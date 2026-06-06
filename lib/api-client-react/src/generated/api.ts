@@ -3138,3 +3138,87 @@ export const useUploadInvoiceGuia = <
 > => {
   return useMutation(getUploadInvoiceGuiaMutationOptions(options));
 };
+
+/**
+ * @summary Cancel a submitted invoice and revert its effects
+ */
+export const getCancelInvoiceUrl = (id: number) => {
+  return `/api/invoices/${id}/cancel`;
+};
+
+export const cancelInvoice = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Invoice> => {
+  return customFetch<Invoice>(getCancelInvoiceUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCancelInvoiceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["cancelInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelInvoice>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return cancelInvoice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelInvoiceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelInvoice>>
+>;
+
+export type CancelInvoiceMutationError = ErrorType<void>;
+
+/**
+ * @summary Cancel a submitted invoice and revert its effects
+ */
+export const useCancelInvoice = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getCancelInvoiceMutationOptions(options));
+};

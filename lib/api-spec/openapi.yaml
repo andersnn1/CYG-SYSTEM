@@ -739,6 +739,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/Invoice"
 
+  /invoices/{id}/cancel:
+    post:
+      operationId: cancelInvoice
+      tags: [invoices]
+      summary: Cancel a submitted invoice and revert its effects
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          description: Bad request
+        "404":
+          description: Invoice not found
+
 components:
   schemas:
     HealthStatus:
@@ -1013,6 +1036,8 @@ components:
           type: string
         address:
           type: ["string", "null"]
+        rtn:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -1040,6 +1065,8 @@ components:
           type: string
         address:
           type: ["string", "null"]
+        rtn:
+          type: ["string", "null"]
       required:
         - name
         - city
@@ -1059,6 +1086,8 @@ components:
         department:
           type: string
         address:
+          type: ["string", "null"]
+        rtn:
           type: ["string", "null"]
 
     Sale:
@@ -1326,7 +1355,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pendiente, pagada, cancelada]
+          enum: [borrador, pendiente, pagada, cancelada]
         subtotal:
           type: number
         discount:
@@ -1359,10 +1388,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InvoiceItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoicePayment"
         createdAt:
           type: string
+          format: date-time
         updatedAt:
           type: string
+          format: date-time
       required:
         - id
         - invoiceNumber
@@ -1400,6 +1435,31 @@ components:
         - unitPrice
         - total
 
+    InvoicePayment:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceId:
+          type: integer
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+        transferReference:
+          type: ["string", "null"]
+        paymentDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - invoiceId
+        - amount
+        - paymentMethod
+        - paymentDate
+        - createdAt
+
     CreateInvoiceBody:
       type: object
       properties:
@@ -1425,9 +1485,12 @@ components:
           type: string
         clientRtn:
           type: string
+        status:
+          type: string
+          enum: [borrador, pendiente, pagada, cancelada]
         paymentMethod:
           type: string
-          enum: [efectivo, tarjeta, transferencia, cheque]
+          enum: [efectivo, tarjeta, deposito, link_pago]
         transferReference:
           type: string
         issueDate:
@@ -1487,7 +1550,7 @@ components:
       properties:
         status:
           type: string
-          enum: [pendiente, pagada, cancelada]
+          enum: [borrador, pendiente, pagada, cancelada]
         clientName:
           type: string
         clientPhone:
@@ -1510,7 +1573,7 @@ components:
           type: string
         paymentMethod:
           type: string
-          enum: [efectivo, tarjeta, transferencia, cheque]
+          enum: [efectivo, tarjeta, deposito, link_pago]
         transferReference:
           type: string
         issueDate:

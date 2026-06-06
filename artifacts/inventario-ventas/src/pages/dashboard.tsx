@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useGetDashboardSummary, useGetSalesChart, useGetTopProducts } from "@workspace/api-client-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useGetSalesChart, useGetTopProducts } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,11 @@ import { Package, AlertTriangle, DollarSign, TrendingDown, Target, Download, Pen
 import { startOfDay, isSameDay, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DatePickerCalendar } from "@/components/date-picker-calendar";
 import { useLocation } from "wouter";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const API_BASE = "/api";
 async function apiFetch(path: string, options?: RequestInit) {
@@ -83,9 +85,43 @@ const CALENDAR_BUTTON_STYLES: Record<string, React.CSSProperties> = {
 export default function Dashboard() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
-  const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
-  const { data: chartData, isLoading: isLoadingChart } = useGetSalesChart();
+
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    return `${now.getFullYear()}-${mm}`;
+  });
+
+  const periodOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [{ value: "all", label: "Histórico Completo" }];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleString("es-ES", { month: "long", year: "numeric" });
+      list.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
+    return list;
+  }, []);
+
+  const { month, year, isAllTime } = useMemo(() => {
+    if (selectedPeriod === "all") {
+      return { month: "all", year: null, isAllTime: true };
+    }
+    const [yStr, mStr] = selectedPeriod.split("-");
+    return { month: parseInt(mStr), year: parseInt(yStr), isAllTime: false };
+  }, [selectedPeriod]);
+
+  const { data: summary, isLoading: isLoadingSummary } = useQuery<any>({
+    queryKey: ["GetDashboardSummary", selectedPeriod],
+    queryFn: () => apiFetch(`/dashboard/summary?month=${month}&year=${year}`),
+  });
+
+  const now = new Date();
+  const chartYear = isAllTime ? now.getFullYear() : year;
+  const { data: chartData, isLoading: isLoadingChart } = useGetSalesChart({ year: chartYear ?? undefined });
   const { data: topProductsData, isLoading: isLoadingProducts } = useGetTopProducts();
   const topProducts = Array.isArray(topProductsData) ? topProductsData : [];
 
@@ -141,7 +177,6 @@ export default function Dashboard() {
       .catch(() => {});
   }, []);
 
-  const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
@@ -152,10 +187,12 @@ export default function Dashboard() {
       return;
     }
     setSavingGoal(true);
+    const targetMonth = isAllTime ? currentMonth : month;
+    const targetYear = isAllTime ? currentYear : year;
     try {
       await apiFetch("/dashboard/monthly-goal", {
         method: "POST",
-        body: JSON.stringify({ month: currentMonth, year: currentYear, targetAmount: amount }),
+        body: JSON.stringify({ month: targetMonth, year: targetYear, targetAmount: amount }),
       });
       toast({ title: "Meta de ventas actualizada" });
       setGoalDialogOpen(false);
@@ -208,19 +245,33 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground text-sm sm:text-base">Resumen general de tu negocio</p>
         </div>
-        <Button
-          variant="outline"
-          className="gap-2 flex-shrink-0 h-11"
-          onClick={handleExportBackup}
-        >
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Exportar Respaldo</span>
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+            <SelectTrigger className="w-[180px] bg-background h-10 text-xs font-semibold">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {periodOptions.map(opt => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            className="gap-2 flex-shrink-0 h-10"
+            onClick={handleExportBackup}
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Exportar Respaldo</span>
+          </Button>
+        </div>
       </div>
 
       {/* Alert Banner — only when there are quotes scheduled for TODAY */}
@@ -245,214 +296,256 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Quick Actions for Mobile */}
+      {isMobile && (
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => navigate("/facturas/nueva")}
+            className="flex items-center gap-3 bg-primary text-primary-foreground rounded-xl p-4 text-left shadow-sm active:scale-95 transition-transform cursor-pointer"
+          >
+            <FileText className="h-5 w-5 flex-shrink-0" />
+            <span className="font-semibold text-sm">Nueva Factura</span>
+          </button>
+          <button
+            onClick={() => navigate("/gastos")}
+            className="flex items-center gap-3 bg-card border rounded-xl p-4 text-left shadow-sm active:scale-95 transition-transform cursor-pointer"
+          >
+            <DollarSign className="h-5 w-5 flex-shrink-0 text-primary" />
+            <span className="font-semibold text-sm">Nuevo Gasto</span>
+          </button>
+          <button
+            onClick={() => navigate("/cotizaciones/nueva")}
+            className="flex items-center gap-3 bg-card border rounded-xl p-4 text-left shadow-sm active:scale-95 transition-transform cursor-pointer"
+          >
+            <FileText className="h-5 w-5 flex-shrink-0 text-primary" />
+            <span className="font-semibold text-sm">Nueva Cotización</span>
+          </button>
+          <button
+            onClick={() => navigate("/inventario")}
+            className="flex items-center gap-3 bg-card border rounded-xl p-4 text-left shadow-sm active:scale-95 transition-transform cursor-pointer"
+          >
+            <Package className="h-5 w-5 flex-shrink-0 text-primary" />
+            <span className="font-semibold text-sm">Ver Stock</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Ganancia Distribuible */}
-        <Card className="sm:col-span-1 bg-primary text-primary-foreground border-none">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" /> Ganancia Distribuible
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(distributable)}</div>
-            <div className="mt-2 pt-2 border-t border-primary-foreground/20">
-              <div className="flex justify-between items-center text-xs opacity-90">
-                <span>Cierre Real (Facturas):</span>
-                <span className="font-bold">{formatCurrency((summary as any).monthlyRealProfit ?? 0)}</span>
-              </div>
-              <p className="text-[10px] mt-1 opacity-70">Basado en gastos operativos de este mes</p>
+      {(() => {
+        const periodLabel = selectedPeriod === "all" ? "Histórico Completo" : periodOptions.find(o => o.value === selectedPeriod)?.label || "";
+        const shortPeriodLabel = selectedPeriod === "all" ? "Histórico" : periodLabel;
+        return (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Ganancia Distribuible */}
+              <Card className="sm:col-span-1 bg-primary text-primary-foreground border-none">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" /> Ganancia Distribuible {selectedPeriod === "all" ? "" : `(${shortPeriodLabel})`}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{formatCurrency(distributable)}</div>
+                  <div className="mt-2 pt-2 border-t border-primary-foreground/20">
+                    <div className="flex justify-between items-center text-xs opacity-90">
+                      <span>Cierre Real (Facturas):</span>
+                      <span className="font-bold">{formatCurrency((summary as any).monthlyRealProfit ?? 0)}</span>
+                    </div>
+                    <p className="text-[10px] mt-1 opacity-70">Basado en gastos operativos de este período</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                    <Package className="h-4 w-4" /> Nro. de Ventas {selectedPeriod === "all" ? "" : `(${shortPeriodLabel})`}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{summary.totalSales}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{summary.totalClients} clientes registrados</div>
+                </CardContent>
+              </Card>
+
+              <Card className={summary.lowStockCount > 0 ? "border-destructive/50 bg-destructive/10" : ""}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                    <AlertTriangle className={summary.lowStockCount > 0 ? "h-4 w-4 text-destructive" : "h-4 w-4"} /> Alertas Stock
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-2xl font-bold ${summary.lowStockCount > 0 ? "text-destructive" : ""}`}>{summary.lowStockCount}</div>
+                  <p className="text-xs mt-1 text-muted-foreground">Productos con stock bajo</p>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-              <Package className="h-4 w-4" /> Nro. de Ventas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.totalSales}</div>
-            <div className="text-xs text-muted-foreground mt-1">{summary.totalClients} clientes registrados</div>
-          </CardContent>
-        </Card>
+            {/* Monthly Stats Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Gastos del Mes */}
+              <Card className="border-orange-300/50 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-800/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                    <TrendingDown className="h-4 w-4" /> Gastos {selectedPeriod === "all" ? "Totales" : `(${shortPeriodLabel})`}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatCurrency(monthlyExpenses)}
+                  </div>
+                  <p className="text-xs mt-1 text-muted-foreground">
+                    vs ventas {selectedPeriod === "all" ? "totales" : "del período"}: {formatCurrency(monthlySales)}
+                  </p>
+                </CardContent>
+              </Card>
 
-        <Card className={summary.lowStockCount > 0 ? "border-destructive/50 bg-destructive/10" : ""}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-              <AlertTriangle className={summary.lowStockCount > 0 ? "h-4 w-4 text-destructive" : "h-4 w-4"} /> Alertas Stock
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${summary.lowStockCount > 0 ? "text-destructive" : ""}`}>{summary.lowStockCount}</div>
-            <p className="text-xs mt-1 text-muted-foreground">Productos con stock bajo</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Monthly Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Gastos del Mes */}
-        <Card className="border-orange-300/50 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-800/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-400">
-              <TrendingDown className="h-4 w-4" /> Gastos del Mes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-700 dark:text-orange-400">
-              {formatCurrency(monthlyExpenses)}
+              {/* Meta de Ventas */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                      <Target className="h-4 w-4" /> Meta de Ventas {selectedPeriod === "all" ? "del Mes Actual" : `(${shortPeriodLabel})`}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setGoalInput(monthlyGoal ? String(monthlyGoal) : "");
+                        setGoalDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {monthlyGoal === null ? (
+                    <div className="text-sm text-muted-foreground">
+                      Sin meta definida
+                      <Button
+                        variant="link"
+                        className="px-1 h-auto text-sm text-primary"
+                        onClick={() => { setGoalInput(""); setGoalDialogOpen(true); }}
+                      >
+                        Establecer meta
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Vendido: <span className="font-semibold text-foreground">{formatCurrency(monthlySales)}</span></span>
+                        <span className="text-muted-foreground">Meta: <span className="font-semibold text-foreground">{formatCurrency(monthlyGoal)}</span></span>
+                      </div>
+                      <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${goalBarColor}`}
+                          style={{ width: `${goalPercent ?? 0}%` }}
+                        />
+                      </div>
+                      <div className={`text-lg font-bold ${
+                        goalPercent !== null && goalPercent >= 80 ? "text-green-600 dark:text-green-400"
+                        : goalPercent !== null && goalPercent >= 50 ? "text-amber-600 dark:text-amber-400"
+                        : "text-red-600 dark:text-red-400"
+                      }`}>
+                        {goalPercent ?? 0}% alcanzado
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-            <p className="text-xs mt-1 text-muted-foreground">
-              vs ventas del mes: {formatCurrency(monthlySales)}
-            </p>
-          </CardContent>
-        </Card>
 
-        {/* Meta de Ventas */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-                <Target className="h-4 w-4" /> Meta de Ventas del Mes
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  setGoalInput(monthlyGoal ? String(monthlyGoal) : "");
-                  setGoalDialogOpen(true);
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {monthlyGoal === null ? (
-              <div className="text-sm text-muted-foreground">
-                Sin meta definida
-                <Button
-                  variant="link"
-                  className="px-1 h-auto text-sm text-primary"
-                  onClick={() => { setGoalInput(""); setGoalDialogOpen(true); }}
-                >
-                  Establecer meta
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Vendido: <span className="font-semibold text-foreground">{formatCurrency(monthlySales)}</span></span>
-                  <span className="text-muted-foreground">Meta: <span className="font-semibold text-foreground">{formatCurrency(monthlyGoal)}</span></span>
+            {/* Distribución de Fondos */}
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <CardTitle>Distribución de Fondos</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-0.5">Cómo se divide tu ganancia {selectedPeriod === "all" ? "total" : `(${shortPeriodLabel})`} de <span className="font-semibold text-foreground">{formatCurrency(distributable)}</span></p>
+                  </div>
+                  {(summary as any).monthlyRealProfit > 0 && (
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-lg">
+                      <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-tight">Utilidad Real {selectedPeriod === "all" ? "Total" : "del Período"}</p>
+                      <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">{formatCurrency((summary as any).monthlyRealProfit)}</p>
+                    </div>
+                  )}
                 </div>
-                <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${goalBarColor}`}
-                    style={{ width: `${goalPercent ?? 0}%` }}
-                  />
-                </div>
-                <div className={`text-lg font-bold ${
-                  goalPercent !== null && goalPercent >= 80 ? "text-green-600 dark:text-green-400"
-                  : goalPercent !== null && goalPercent >= 50 ? "text-amber-600 dark:text-amber-400"
-                  : "text-red-600 dark:text-red-400"
-                }`}>
-                  {goalPercent ?? 0}% alcanzado
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Operación */}
+                  <div className="rounded-xl border-2 border-blue-500/30 bg-blue-500/10 p-4 space-y-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
+                        <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Operación 50%</span>
+                      </div>
+                    </div>
+                    <div className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatCurrency(summary.profitFirst?.operacion ?? 0)}</div>
+                    
+                    <div className="pt-2 mt-2 border-t border-blue-500/20">
+                      <div className="flex justify-between text-[10px] sm:text-xs mb-1">
+                        <span className="text-muted-foreground">Gastos Registrados:</span>
+                        <span className="font-semibold text-red-600 dark:text-red-400">-{formatCurrency(monthlyExpenses)}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] sm:text-xs">
+                        <span className="text-muted-foreground">Fondo Disponible:</span>
+                        <span className={`font-bold ${(summary.profitFirst?.operacion ?? 0) - monthlyExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                          {formatCurrency((summary.profitFirst?.operacion ?? 0) - monthlyExpenses)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-      {/* Distribución de Fondos */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle>Distribución de Fondos</CardTitle>
-              <p className="text-sm text-muted-foreground mt-0.5">Cómo se divide tu ganancia de <span className="font-semibold text-foreground">{formatCurrency(distributable)}</span></p>
-            </div>
-            {(summary as any).monthlyRealProfit > 0 && (
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-lg">
-                <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-tight">Utilidad Real Mensual</p>
-                <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">{formatCurrency((summary as any).monthlyRealProfit)}</p>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Operación */}
-            <div className="rounded-xl border-2 border-blue-500/30 bg-blue-500/10 p-4 space-y-1">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
-                  <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Operación 50%</span>
-                </div>
-              </div>
-              <div className="text-xl font-bold text-blue-700 dark:text-blue-400">{formatCurrency(summary.profitFirst?.operacion ?? 0)}</div>
-              
-              <div className="pt-2 mt-2 border-t border-blue-500/20">
-                <div className="flex justify-between text-[10px] sm:text-xs mb-1">
-                  <span className="text-muted-foreground">Gastos Registrados:</span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">-{formatCurrency(monthlyExpenses)}</span>
-                </div>
-                <div className="flex justify-between text-[10px] sm:text-xs">
-                  <span className="text-muted-foreground">Fondo Disponible:</span>
-                  <span className={`font-bold ${(summary.profitFirst?.operacion ?? 0) - monthlyExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                    {formatCurrency((summary.profitFirst?.operacion ?? 0) - monthlyExpenses)}
-                  </span>
-                </div>
-              </div>
-            </div>
+                  {/* Dueño */}
+                  <div className="rounded-xl border-2 border-purple-500/30 bg-purple-500/10 p-4 space-y-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="inline-block w-3 h-3 rounded-full bg-purple-500"></span>
+                      <span className="text-xs font-semibold text-purple-700 dark:text-purple-400 uppercase tracking-wide">Dueño 40%</span>
+                    </div>
+                    <div className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(summary.profitFirst?.dueno ?? 0)}</div>
+                    <p className="text-xs text-muted-foreground">Tu pago personal</p>
+                    <div className="h-1.5 w-full bg-purple-200 dark:bg-purple-900/30 rounded-full mt-2">
+                      <div className="h-full bg-purple-500 rounded-full w-[40%]" />
+                    </div>
+                  </div>
 
-            {/* Dueño */}
-            <div className="rounded-xl border-2 border-purple-500/30 bg-purple-500/10 p-4 space-y-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-block w-3 h-3 rounded-full bg-purple-500"></span>
-                <span className="text-xs font-semibold text-purple-700 dark:text-purple-400 uppercase tracking-wide">Dueño 40%</span>
-              </div>
-              <div className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(summary.profitFirst?.dueno ?? 0)}</div>
-              <p className="text-xs text-muted-foreground">Tu pago personal</p>
-              <div className="h-1.5 w-full bg-purple-200 dark:bg-purple-900/30 rounded-full mt-2">
-                <div className="h-full bg-purple-500 rounded-full w-[40%]" />
-              </div>
-            </div>
+                  {/* Ganancia */}
+                  <div className="rounded-xl border-2 border-green-500/30 bg-green-500/10 p-4 space-y-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>
+                      <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">Reserva 10%</span>
+                    </div>
+                    <div className="text-xl font-bold text-green-700 dark:text-green-400">{formatCurrency(summary.profitFirst?.ganancia ?? 0)}</div>
+                    <p className="text-xs text-muted-foreground">Fondo de reserva</p>
+                    <div className="h-1.5 w-full bg-green-200 dark:bg-green-900/30 rounded-full mt-2">
+                      <div className="h-full bg-green-500 rounded-full w-[10%]" />
+                    </div>
+                  </div>
+                </div>
 
-            {/* Ganancia */}
-            <div className="rounded-xl border-2 border-green-500/30 bg-green-500/10 p-4 space-y-1">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>
-                <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">Reserva 10%</span>
-              </div>
-              <div className="text-xl font-bold text-green-700 dark:text-green-400">{formatCurrency(summary.profitFirst?.ganancia ?? 0)}</div>
-              <p className="text-xs text-muted-foreground">Fondo de reserva</p>
-              <div className="h-1.5 w-full bg-green-200 dark:bg-green-900/30 rounded-full mt-2">
-                <div className="h-full bg-green-500 rounded-full w-[10%]" />
-              </div>
-            </div>
-          </div>
-
-          {distributable > 0 && (
-            <div className="pt-2 border-t">
-              <p className="text-xs text-muted-foreground mb-2">Distribución de la ganancia:</p>
-              <div className="flex h-3 rounded-full overflow-hidden">
-                <div className="bg-blue-500 w-1/2" title="Operación 50%" />
-                <div className="bg-purple-500 w-[40%]" title="Dueño 40%" />
-                <div className="bg-green-500 w-[10%]" title="Reserva 10%" />
-              </div>
-              <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> Gastos operativos (50%)</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block"></span> Dueño (40%)</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Reserva (10%)</span>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                {distributable > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-2">Distribución de la ganancia:</p>
+                    <div className="flex h-3 rounded-full overflow-hidden">
+                      <div className="bg-blue-500 w-1/2" title="Operación 50%" />
+                      <div className="bg-purple-500 w-[40%]" title="Dueño 40%" />
+                      <div className="bg-green-500 w-[10%]" title="Reserva 10%" />
+                    </div>
+                    <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> Gastos operativos (50%)</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block"></span> Dueño (40%)</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Reserva (10%)</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        );
+      })()}
 
       {/* Calendar + Recent Cotizaciones — equal-height side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
@@ -586,9 +679,21 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Ventas Mensuales</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className={isMobile ? "h-auto" : "h-[300px]"}>
             {isLoadingChart ? (
-              <Skeleton className="h-full w-full" />
+              <Skeleton className="h-[300px] w-full" />
+            ) : isMobile ? (
+              <div className="overflow-x-auto pb-2">
+                <div className="flex gap-3 min-w-max">
+                  {(chartData ?? []).slice(-3).map((month: any) => (
+                    <div key={month.month} className="bg-muted/50 border rounded-xl p-4 min-w-[140px] space-y-1">
+                      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{month.month}</p>
+                      <p className="text-lg font-black text-primary">{formatCurrency(month.income)}</p>
+                      <p className="text-xs text-muted-foreground">Ganancia: <span className="font-semibold text-foreground">{formatCurrency(month.profit)}</span></p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : chartData && chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>

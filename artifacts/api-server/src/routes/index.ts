@@ -13,6 +13,7 @@ import quotesRouter from "./quotes";
 import combosRouter from "./combos";
 import customInventoryRouter from "./custom-inventory";
 import inventoryCsvRouter from "./inventory-csv";
+import accountingRouter from "./accounting";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(quotesRouter);
 router.use(combosRouter);
 router.use(customInventoryRouter);
 router.use(inventoryCsvRouter);
+router.use(accountingRouter);
 
 export default router;

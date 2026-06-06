@@ -9,6 +9,7 @@
 export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
 export const InvoiceStatus = {
+  borrador: "borrador",
   pendiente: "pendiente",
   pagada: "pagada",
   cancelada: "cancelada",

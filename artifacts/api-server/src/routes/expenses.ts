@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
-import { db, expensesTable } from "@workspace/db";
+import { db, expensesTable, journalEntriesTable } from "@workspace/db";
 import { z } from "zod";
+import { injectJournalEntry, isPeriodLocked } from "../lib/accounting-service";
 
 const router: IRouter = Router();
 
@@ -70,6 +71,11 @@ router.post("/expenses", async (req, res): Promise<void> => {
 
   const { amount, category, description, expenseDate, notes } = parsed.data;
 
+  if (await isPeriodLocked(expenseDate)) {
+    res.status(400).json({ error: `El período contable para la fecha ${expenseDate} está cerrado.` });
+    return;
+  }
+
   const [expense] = await db.insert(expensesTable).values({
     amount: String(amount),
     category,
@@ -77,6 +83,16 @@ router.post("/expenses", async (req, res): Promise<void> => {
     expenseDate,
     notes: notes ?? null,
   }).returning();
+
+  await injectJournalEntry(
+    "expense_created",
+    expenseDate,
+    `Expense_${expense.id}`,
+    {
+      amount: Number(amount),
+    },
+    `Registro de Gasto: ${category}${description ? ` - ${description}` : ""}`
+  );
 
   res.status(201).json(mapExpense(expense));
 });
@@ -101,7 +117,18 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  if (await isPeriodLocked(existing.expenseDate)) {
+    res.status(400).json({ error: `El período contable para la fecha original de este gasto (${existing.expenseDate}) está cerrado.` });
+    return;
+  }
+
   const data = parsed.data;
+  const newDate = data.expenseDate || existing.expenseDate;
+  if (await isPeriodLocked(newDate)) {
+    res.status(400).json({ error: `El período contable para la nueva fecha de este gasto (${newDate}) está cerrado.` });
+    return;
+  }
+
   const [updated] = await db.update(expensesTable).set({
     ...(data.amount !== undefined && { amount: String(data.amount) }),
     ...(data.category !== undefined && { category: data.category }),
@@ -109,6 +136,16 @@ router.patch("/expenses/:id", async (req, res): Promise<void> => {
     ...(data.expenseDate !== undefined && { expenseDate: data.expenseDate }),
     ...(data.notes !== undefined && { notes: data.notes ?? null }),
   }).where(eq(expensesTable.id, id)).returning();
+
+  await injectJournalEntry(
+    "expense_created",
+    updated.expenseDate,
+    `Expense_${updated.id}`,
+    {
+      amount: Number(updated.amount),
+    },
+    `Gasto modificado: ${updated.category}${updated.description ? ` - ${updated.description}` : ""}`
+  );
 
   res.json(mapExpense(updated));
 });
@@ -121,12 +158,21 @@ router.delete("/expenses/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [expense] = await db.delete(expensesTable).where(eq(expensesTable.id, id)).returning();
-  if (!expense) {
+  const [existing] = await db.select().from(expensesTable).where(eq(expensesTable.id, id));
+  if (!existing) {
     res.status(404).json({ error: "Expense not found" });
     return;
   }
 
+  if (await isPeriodLocked(existing.expenseDate)) {
+    res.status(400).json({ error: `El período contable para la fecha de este gasto (${existing.expenseDate}) está cerrado.` });
+    return;
+  }
+
+  // Delete associated journal entry
+  await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Expense_${id}`));
+
+  await db.delete(expensesTable).where(eq(expensesTable.id, id));
   res.sendStatus(204);
 });
 

@@ -164,13 +164,19 @@ export default function Inventario() {
 
   const loadCustom = useCallback(async () => {
     try {
-      const [cats, items] = await Promise.all([
-        apiFetch("/inventory-categories"),
-        apiFetch("/custom-inventory"),
-      ]);
+      const cats = await apiFetch("/inventory-categories").catch(err => {
+        console.error("Error loading categories:", err);
+        return [];
+      });
+      const items = await apiFetch("/custom-inventory").catch(err => {
+        console.error("Error loading custom inventory:", err);
+        return [];
+      });
       setCategories(Array.isArray(cats) ? cats : []);
       setCustomItems(Array.isArray(items) ? items : []);
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error("Error in loadCustom:", e);
+    }
   }, []);
 
   useEffect(() => { loadCustom(); }, [loadCustom]);
@@ -255,6 +261,13 @@ export default function Inventario() {
     setForm(defaultForm);
     setFormOpen(true);
   };
+
+  useEffect(() => {
+    (window as any).__openNewProduct = openCreate;
+    return () => {
+      delete (window as any).__openNewProduct;
+    };
+  }, []);
 
   const handleExportCsv = () => {
     window.location.href = `${API_BASE}/inventory/export-csv`;
@@ -964,12 +977,13 @@ export default function Inventario() {
                 className="w-full"
                 disabled={catSubmitting || !catForm.name.trim()}
                 onClick={async () => {
+                  const categoryName = catForm.name.trim();
                   setCatSubmitting(true);
                   try {
-                    await apiFetch("/inventory-categories", { method: "POST", body: JSON.stringify({ name: catForm.name.trim(), color: catForm.color, description: catForm.description || null }) });
+                    await apiFetch("/inventory-categories", { method: "POST", body: JSON.stringify({ name: categoryName, color: catForm.color, description: catForm.description || null }) });
                     setCatForm({ name: "", color: "slate", description: "" });
                     await loadCustom();
-                    toast({ title: `Categoría "${catForm.name.trim()}" creada` });
+                    toast({ title: `Categoría "${categoryName}" creada` });
                   } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
                   finally { setCatSubmitting(false); }
                 }}

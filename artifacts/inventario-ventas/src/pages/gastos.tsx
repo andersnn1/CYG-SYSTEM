@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,13 @@ export default function Gastos() {
     setForm(defaultForm());
     setFormOpen(true);
   };
+
+  useEffect(() => {
+    (window as any).__openNewExpense = openCreate;
+    return () => {
+      delete (window as any).__openNewExpense;
+    };
+  }, []);
 
   const openEdit = (expense: Expense) => {
     setEditExpense(expense);

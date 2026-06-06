@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql, and } from "drizzle-orm";
-import { db, invoicesTable, invoiceItemsTable, clientsTable, perfumeryTable, sublimationTable, salesTable, combosTable, comboItemsTable } from "@workspace/db";
+import { db, invoicesTable, invoiceItemsTable, clientsTable, perfumeryTable, sublimationTable, salesTable, combosTable, comboItemsTable, journalEntriesTable, invoicePaymentsTable } from "@workspace/db";
+import { injectJournalEntry, isPeriodLocked } from "../lib/accounting-service";
 import {
   CreateInvoiceBody,
   UpdateInvoiceBody,
@@ -22,7 +23,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const router: IRouter = Router();
 
-function mapInvoice(invoice: typeof invoicesTable.$inferSelect, items?: typeof invoiceItemsTable.$inferSelect[]) {
+function mapInvoice(
+  invoice: typeof invoicesTable.$inferSelect, 
+  items?: typeof invoiceItemsTable.$inferSelect[],
+  payments?: typeof invoicePaymentsTable.$inferSelect[]
+) {
   return {
     ...invoice,
     subtotal: Number(invoice.subtotal),
@@ -41,6 +46,11 @@ function mapInvoice(invoice: typeof invoicesTable.$inferSelect, items?: typeof i
       unitPrice: Number(item.unitPrice),
       total: Number(item.total),
     })),
+    payments: payments?.map(p => ({
+      ...p,
+      amount: Number(p.amount),
+      createdAt: p.createdAt.toISOString(),
+    })) || [],
   };
 }
 
@@ -81,7 +91,8 @@ router.get("/invoices/:id", async (req, res): Promise<void> => {
   if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
 
   const items = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, invoice.id));
-  res.json(mapInvoice(invoice, items));
+  const payments = await db.select().from(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, invoice.id));
+  res.json(mapInvoice(invoice, items, payments));
 });
 
 // POST /invoices
@@ -92,6 +103,10 @@ router.post("/invoices", async (req, res): Promise<void> => {
   try {
     console.log("INVOICE POST PAYLOAD:", JSON.stringify(parsed.data, null, 2));
     const { items, ...invoiceData } = parsed.data;
+    if (await isPeriodLocked(invoiceData.issueDate)) {
+      res.status(400).json({ error: `El período contable para la fecha ${invoiceData.issueDate} está cerrado.` });
+      return;
+    }
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const discount = invoiceData.discount ?? 0;
     const tax = invoiceData.tax ?? 0;
@@ -128,7 +143,11 @@ router.post("/invoices", async (req, res): Promise<void> => {
       clientAddress,
       clientCity,
       clientDepartment,
-      status: "pendiente",
+      status: invoiceData.status ?? (
+        (invoiceData.paymentMethod === "efectivo" || invoiceData.paymentMethod === "tarjeta" || invoiceData.transferReference)
+          ? "pagada"
+          : "pendiente"
+      ),
       subtotal: String(subtotal),
       discount: String(discount),
       tax: String(tax),
@@ -164,89 +183,158 @@ router.post("/invoices", async (req, res): Promise<void> => {
       }))
     ).returning();
 
-    // Discount stock and create sale records for items linked to products
-    for (const item of items) {
-      if (!item.productId || !item.productType) continue;
+    let insertedPayment: typeof invoicePaymentsTable.$inferSelect | undefined;
 
-      let productName: string | null = null;
-      let costPrice: number | null = null;
+    // Solo descontar stock, crear registro de venta e inyectar asientos si NO es borrador
+    if (invoice.status !== "borrador") {
+      for (const item of items) {
+        if (!item.productId || !item.productType) continue;
 
-      if (item.productType === "perfumeria") {
-        const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
-        if (product) {
-          productName = product.name;
-          costPrice = Number(product.costPrice ?? 0);
-          await db.update(perfumeryTable)
-            .set({ stock: product.stock - item.quantity })
-            .where(eq(perfumeryTable.id, item.productId));
-        }
-      } else if (item.productType === "sublimacion") {
-        const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
-        if (product) {
-          productName = product.name;
-          costPrice = Number(product.costPrice ?? 0);
-          if (product.stock !== null) {
-            await db.update(sublimationTable)
+        let productName: string | null = null;
+        let costPrice: number | null = null;
+
+        if (item.productType === "perfumeria") {
+          const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+          if (product) {
+            productName = product.name;
+            costPrice = Number(product.costPrice ?? 0);
+            await db.update(perfumeryTable)
               .set({ stock: product.stock - item.quantity })
-              .where(eq(sublimationTable.id, item.productId));
+              .where(eq(perfumeryTable.id, item.productId));
           }
-        }
-      } else if (item.productType === "combo") {
-        const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
-        if (combo) {
-          productName = combo.name;
-          
-          let totalCost = 0;
-          const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
-          
-          for (const cItem of comboItems) {
-            if (cItem.productType === "perfumeria") {
-              const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
-              if (cProduct) {
-                totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-                await db.update(perfumeryTable)
-                  .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
-                  .where(eq(perfumeryTable.id, cItem.productId));
-              }
-            } else if (cItem.productType === "sublimacion") {
-              const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
-              if (cProduct) {
-                totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-                if (cProduct.stock !== null) {
-                  await db.update(sublimationTable)
+        } else if (item.productType === "sublimacion") {
+          const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+          if (product) {
+            productName = product.name;
+            costPrice = Number(product.costPrice ?? 0);
+            if (product.stock !== null) {
+              await db.update(sublimationTable)
+                .set({ stock: product.stock - item.quantity })
+                .where(eq(sublimationTable.id, item.productId));
+            }
+          }
+        } else if (item.productType === "combo") {
+          const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+          if (combo) {
+            productName = combo.name;
+            let totalCost = 0;
+            const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+            
+            for (const cItem of comboItems) {
+              if (cItem.productType === "perfumeria") {
+                const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+                if (cProduct) {
+                  totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                  await db.update(perfumeryTable)
                     .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
-                    .where(eq(sublimationTable.id, cItem.productId));
+                    .where(eq(perfumeryTable.id, cItem.productId));
+                }
+              } else if (cItem.productType === "sublimacion") {
+                const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+                if (cProduct) {
+                  totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                  if (cProduct.stock !== null) {
+                    await db.update(sublimationTable)
+                      .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                      .where(eq(sublimationTable.id, cItem.productId));
+                  }
                 }
               }
             }
+            costPrice = totalCost;
           }
-          costPrice = totalCost;
+        }
+
+        if (productName !== null && costPrice !== null) {
+          const totalAmount = item.quantity * item.unitPrice;
+          const netProfit = totalAmount - (item.quantity * costPrice);
+          await db.insert(salesTable).values({
+            invoiceId: invoice.id,
+            clientId: invoice.clientId ?? null,
+            clientName: invoice.clientName,
+            productType: item.productType,
+            productId: item.productId,
+            productName,
+            quantity: item.quantity,
+            unitPrice: String(item.unitPrice),
+            costPrice: String(costPrice),
+            shippingCost: "0",
+            totalAmount: String(totalAmount),
+            netProfit: String(netProfit),
+            notes: `Generado desde factura ${invoiceNumber}`,
+            saleDate: invoiceData.issueDate,
+          });
         }
       }
 
-      if (productName !== null && costPrice !== null) {
-        const totalAmount = item.quantity * item.unitPrice;
-        const netProfit = totalAmount - (item.quantity * costPrice);
-        await db.insert(salesTable).values({
+      const subtotal_perfumeria = items
+        .filter(it => it.productType === "perfumeria")
+        .reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+      const subtotal_sublimacion = items
+        .filter(it => it.productType === "sublimacion" || it.productType === "combo")
+        .reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+
+      await injectJournalEntry(
+        "invoice_created",
+        invoiceData.issueDate,
+        `Invoice_${invoice.id}`,
+        {
+          subtotal: Number(subtotal),
+          subtotal_perfumeria,
+          subtotal_sublimacion,
+          discount: Number(discount),
+          tax: Number(tax),
+          total: Number(total),
+        },
+        `Emisión de Factura ${invoiceNumber} - ${clientName}`
+      );
+
+      if (invoice.status === "pagada") {
+        const [payment] = await db.insert(invoicePaymentsTable).values({
           invoiceId: invoice.id,
-          clientId: invoice.clientId ?? null,
-          clientName: invoice.clientName,
-          productType: item.productType,
-          productId: item.productId,
-          productName,
-          quantity: item.quantity,
-          unitPrice: String(item.unitPrice),
-          costPrice: String(costPrice),
-          shippingCost: "0",
-          totalAmount: String(totalAmount),
-          netProfit: String(netProfit),
-          notes: `Generado desde factura ${invoiceNumber}`,
-          saleDate: invoiceData.issueDate,
-        });
+          amount: invoice.total,
+          paymentMethod: invoice.paymentMethod,
+          transferReference: invoice.transferReference ?? null,
+          paymentDate: invoice.issueDate,
+        }).returning();
+        insertedPayment = payment;
+
+        const baseCostVal = invoice.baseCost ? Number(invoice.baseCost) : 0;
+        if (baseCostVal > 0) {
+          const internalExpensesVal = invoice.internalExpenses ? Number(invoice.internalExpenses) : 0;
+          const partnerPayoutVal = invoice.partnerPayout ? Number(invoice.partnerPayout) : 0;
+          const ownerPayoutVal = invoice.ownerPayout ? Number(invoice.ownerPayout) : 0;
+
+          await injectJournalEntry(
+            "invoice_paid_back_to_back",
+            invoice.issueDate,
+            `InvoicePayment_${invoice.id}`,
+            {
+              total: Number(invoice.total),
+              baseCost: baseCostVal,
+              internalExpenses: internalExpensesVal,
+              partnerPayout: partnerPayoutVal,
+              ownerPayoutOperativa: ownerPayoutVal * 0.50,
+              ownerPayoutPersonal: ownerPayoutVal * 0.40,
+              ownerPayoutUtilidad: ownerPayoutVal * 0.10,
+            },
+            `Cobro de Factura Back-to-Back ${invoice.invoiceNumber} - ${invoice.clientName}`
+          );
+        } else {
+          await injectJournalEntry(
+            "invoice_paid",
+            invoice.issueDate,
+            `InvoicePayment_${invoice.id}`,
+            {
+              total: Number(invoice.total),
+            },
+            `Cobro de Factura ${invoice.invoiceNumber} - ${invoice.clientName}`
+          );
+        }
       }
     }
 
-    res.status(201).json(mapInvoice(invoice, insertedItems));
+    res.status(201).json(mapInvoice(invoice, insertedItems, insertedPayment ? [insertedPayment] : []));
   } catch (err: any) {
     console.error("CRITICAL ERROR POST /invoices:", err);
     res.status(500).json({ error: "Error al generar factura: " + err.message });
@@ -264,7 +352,38 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
 
+  if (await isPeriodLocked(existing.issueDate)) {
+    res.status(400).json({ error: `El período contable para la fecha original de esta factura (${existing.issueDate}) está cerrado.` });
+    return;
+  }
+
   const { items, ...updateData } = parsed.data;
+  const issueDate = updateData.issueDate || existing.issueDate;
+  if (await isPeriodLocked(issueDate)) {
+    res.status(400).json({ error: `El período contable para la nueva fecha de esta factura (${issueDate}) está cerrado.` });
+    return;
+  }
+
+  // RESTRICCIÓN DE MODIFICACIÓN CONTABLE Y DE ARTÍCULOS PARA FACTURAS EMITIDAS/PAGADAS
+  const isSubmitted = existing.status === "pendiente" || existing.status === "pagada";
+  if (isSubmitted) {
+    const hasFinancialChanges = 
+      items !== undefined ||
+      updateData.clientName !== undefined ||
+      updateData.clientRtn !== undefined ||
+      updateData.discount !== undefined ||
+      updateData.tax !== undefined ||
+      updateData.baseCost !== undefined ||
+      updateData.internalExpenses !== undefined ||
+      updateData.partnerPayout !== undefined ||
+      updateData.ownerPayout !== undefined ||
+      (updateData.issueDate !== undefined && updateData.issueDate !== existing.issueDate);
+
+    if (hasFinancialChanges) {
+      res.status(400).json({ error: "No se pueden modificar datos financieros de una factura confirmada. Debe anularse y crearse otra." });
+      return;
+    }
+  }
 
   let subtotal = Number(existing.subtotal);
   let discount = updateData.discount ?? Number(existing.discount);
@@ -285,64 +404,6 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
         productType: item.productType ?? null,
       }))
     );
-
-    // Recreate sale records for updated items
-    const issueDate = updateData.issueDate ?? existing.issueDate;
-    const clientName = updateData.clientName ?? existing.clientName;
-    const clientId = existing.clientId;
-    const invoiceNumber = existing.invoiceNumber;
-    for (const item of items) {
-      if (!item.productId || !item.productType) continue;
-
-      let productName: string | null = null;
-      let costPrice: number | null = null;
-
-      if (item.productType === "perfumeria") {
-        const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
-        if (product) { productName = product.name; costPrice = Number(product.costPrice ?? 0); }
-      } else if (item.productType === "sublimacion") {
-        const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
-        if (product) { productName = product.name; costPrice = Number(product.costPrice ?? 0); }
-      } else if (item.productType === "combo") {
-        const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
-        if (combo) {
-          productName = combo.name;
-          let totalCost = 0;
-          const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
-          for (const cItem of comboItems) {
-            if (cItem.productType === "perfumeria") {
-              const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
-              if (cProduct) totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-            } else if (cItem.productType === "sublimacion") {
-              const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
-              if (cProduct) totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-            }
-          }
-          costPrice = totalCost;
-        }
-      }
-
-      if (productName !== null && costPrice !== null) {
-        const totalAmount = item.quantity * item.unitPrice;
-        const netProfit = totalAmount - (item.quantity * costPrice);
-        await db.insert(salesTable).values({
-          invoiceId: params.data.id,
-          clientId: clientId ?? null,
-          clientName,
-          productType: item.productType,
-          productId: item.productId,
-          productName,
-          quantity: item.quantity,
-          unitPrice: String(item.unitPrice),
-          costPrice: String(costPrice),
-          shippingCost: "0",
-          totalAmount: String(totalAmount),
-          netProfit: String(netProfit),
-          notes: `Generado desde factura ${invoiceNumber}`,
-          saleDate: issueDate,
-        });
-      }
-    }
   }
 
   const total = subtotal - discount + tax;
@@ -378,8 +439,190 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
     ...(updateData.ownerPayout != null && { ownerPayout: String(updateData.ownerPayout) }),
   }).where(eq(invoicesTable.id, params.data.id)).returning();
 
+  const wasBorrador = existing.status === "borrador";
+  const isNowSubmitted = updated.status === "pendiente" || updated.status === "pagada";
+
+  // Si pasa a estar confirmada/pagada (Submit), descontamos inventario, creamos ventas e inyectamos asientos
+  if (isNowSubmitted) {
+    if (wasBorrador) {
+      const currentItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, updated.id));
+      for (const item of currentItems) {
+        if (!item.productId || !item.productType) continue;
+
+        let productName: string | null = null;
+        let costPrice: number | null = null;
+
+        if (item.productType === "perfumeria") {
+          const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+          if (product) {
+            productName = product.name;
+            costPrice = Number(product.costPrice ?? 0);
+            await db.update(perfumeryTable)
+              .set({ stock: product.stock - item.quantity })
+              .where(eq(perfumeryTable.id, item.productId));
+          }
+        } else if (item.productType === "sublimacion") {
+          const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+          if (product) {
+            productName = product.name;
+            costPrice = Number(product.costPrice ?? 0);
+            if (product.stock !== null) {
+              await db.update(sublimationTable)
+                .set({ stock: product.stock - item.quantity })
+                .where(eq(sublimationTable.id, item.productId));
+            }
+          }
+        } else if (item.productType === "combo") {
+          const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+          if (combo) {
+            productName = combo.name;
+            let totalCost = 0;
+            const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+            for (const cItem of comboItems) {
+              if (cItem.productType === "perfumeria") {
+                const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+                if (cProduct) {
+                  totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                  await db.update(perfumeryTable)
+                    .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                    .where(eq(perfumeryTable.id, cItem.productId));
+                }
+              } else if (cItem.productType === "sublimacion") {
+                const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+                if (cProduct) {
+                  totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                  if (cProduct.stock !== null) {
+                    await db.update(sublimationTable)
+                      .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                      .where(eq(sublimationTable.id, cItem.productId));
+                  }
+                }
+              }
+            }
+            costPrice = totalCost;
+          }
+        }
+
+        if (productName !== null && costPrice !== null) {
+          const totalAmount = item.quantity * Number(item.unitPrice);
+          const netProfit = totalAmount - (item.quantity * costPrice);
+          await db.insert(salesTable).values({
+            invoiceId: updated.id,
+            clientId: updated.clientId ?? null,
+            clientName: updated.clientName,
+            productType: item.productType,
+            productId: item.productId,
+            productName,
+            quantity: item.quantity,
+            unitPrice: String(item.unitPrice),
+            costPrice: String(costPrice),
+            shippingCost: "0",
+            totalAmount: String(totalAmount),
+            netProfit: String(netProfit),
+            notes: `Generado desde factura ${updated.invoiceNumber}`,
+            saleDate: updated.issueDate,
+          });
+        }
+      }
+    }
+
+    // Update invoice_created journal entry
+    let dbItems = items;
+    if (!dbItems) {
+      const fetched = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, updated.id));
+      dbItems = fetched.map(it => ({
+        description: it.description,
+        quantity: it.quantity,
+        unitPrice: Number(it.unitPrice),
+        productId: it.productId ?? undefined,
+        productType: (it.productType as any) ?? undefined,
+      }));
+    }
+
+    const subtotal_perfumeria = dbItems
+      .filter(it => it.productType === "perfumeria")
+      .reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+    const subtotal_sublimacion = dbItems
+      .filter(it => it.productType === "sublimacion" || it.productType === "combo")
+      .reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
+
+    await injectJournalEntry(
+      "invoice_created",
+      updated.issueDate,
+      `Invoice_${updated.id}`,
+      {
+        subtotal: Number(updated.subtotal),
+        subtotal_perfumeria,
+        subtotal_sublimacion,
+        discount: Number(updated.discount),
+        tax: Number(updated.tax),
+        total: Number(updated.total),
+      },
+      `Emisión de Factura ${updated.invoiceNumber} - ${updated.clientName}`
+    );
+
+    // If status is pagada, record/update the receipt journal entry
+    if (updated.status === "pagada") {
+      const [existingPayment] = await db.select().from(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, params.data.id));
+      if (!existingPayment) {
+        await db.insert(invoicePaymentsTable).values({
+          invoiceId: updated.id,
+          amount: updated.total,
+          paymentMethod: updated.paymentMethod,
+          transferReference: updated.transferReference ?? null,
+          paymentDate: updated.issueDate,
+        });
+      } else {
+        await db.update(invoicePaymentsTable).set({
+          amount: updated.total,
+          paymentMethod: updated.paymentMethod,
+          transferReference: updated.transferReference ?? null,
+          paymentDate: updated.issueDate,
+        }).where(eq(invoicePaymentsTable.id, existingPayment.id));
+      }
+
+      const baseCostVal = updated.baseCost ? Number(updated.baseCost) : 0;
+      if (baseCostVal > 0) {
+        const internalExpensesVal = updated.internalExpenses ? Number(updated.internalExpenses) : 0;
+        const partnerPayoutVal = updated.partnerPayout ? Number(updated.partnerPayout) : 0;
+        const ownerPayoutVal = updated.ownerPayout ? Number(updated.ownerPayout) : 0;
+
+        await injectJournalEntry(
+          "invoice_paid_back_to_back",
+          updated.issueDate,
+          `InvoicePayment_${updated.id}`,
+          {
+            total: Number(updated.total),
+            baseCost: baseCostVal,
+            internalExpenses: internalExpensesVal,
+            partnerPayout: partnerPayoutVal,
+            ownerPayoutOperativa: ownerPayoutVal * 0.50,
+            ownerPayoutPersonal: ownerPayoutVal * 0.40,
+            ownerPayoutUtilidad: ownerPayoutVal * 0.10,
+          },
+          `Cobro de Factura Back-to-Back ${updated.invoiceNumber} - ${updated.clientName}`
+        );
+      } else {
+        await injectJournalEntry(
+          "invoice_paid",
+          updated.issueDate,
+          `InvoicePayment_${updated.id}`,
+          {
+            total: Number(updated.total),
+          },
+          `Cobro de Factura ${updated.invoiceNumber} - ${updated.clientName}`
+        );
+      }
+    } else {
+      // If reverted from paid, delete the payment records and journal entries
+      await db.delete(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, params.data.id));
+      await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${updated.id}`));
+    }
+  }
+
   const updatedItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, params.data.id));
-  res.json(mapInvoice(updated, updatedItems));
+  const updatedPayments = await db.select().from(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, params.data.id));
+  res.json(mapInvoice(updated, updatedItems, updatedPayments));
 });
 
 // POST /invoices/:id/guia
@@ -437,11 +680,119 @@ router.delete("/invoices/:id", async (req, res): Promise<void> => {
   const params = DeleteInvoiceParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
+  const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  if (await isPeriodLocked(existing.issueDate)) {
+    res.status(400).json({ error: `El período contable para la fecha de esta factura (${existing.issueDate}) está cerrado.` });
+    return;
+  }
+
+  // RESTRICCIÓN: No permitir eliminar facturas emitidas o pagadas
+  if (existing.status === "pendiente" || existing.status === "pagada") {
+    res.status(400).json({ error: "No se pueden eliminar facturas confirmadas/pagadas. Debe anularlas primero." });
+    return;
+  }
+
+  // Delete associated journal entries
+  await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Invoice_${params.data.id}`));
+  await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${params.data.id}`));
+
   await db.delete(salesTable).where(eq(salesTable.invoiceId, params.data.id));
   await db.delete(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, params.data.id));
-  const [invoice] = await db.delete(invoicesTable).where(eq(invoicesTable.id, params.data.id)).returning();
-  if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+  await db.delete(invoicesTable).where(eq(invoicesTable.id, params.data.id));
   res.sendStatus(204);
+});
+
+// POST /invoices/:id/cancel
+router.post("/invoices/:id/cancel", async (req, res): Promise<void> => {
+  const params = GetInvoiceParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  try {
+    const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
+    if (!invoice) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+    if (invoice.status === "cancelada") {
+      res.status(400).json({ error: "La factura ya está anulada." });
+      return;
+    }
+
+    if (await isPeriodLocked(invoice.issueDate)) {
+      res.status(400).json({ error: `El período contable para la fecha de esta factura (${invoice.issueDate}) está cerrado.` });
+      return;
+    }
+
+    // 1. Revertir stock (devolver cantidades al inventario)
+    const items = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, invoice.id));
+    for (const item of items) {
+      if (!item.productId || !item.productType) continue;
+
+      if (item.productType === "perfumeria") {
+        const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+        if (product) {
+          await db.update(perfumeryTable)
+            .set({ stock: product.stock + item.quantity })
+            .where(eq(perfumeryTable.id, item.productId));
+        }
+      } else if (item.productType === "sublimacion") {
+        const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+        if (product) {
+          if (product.stock !== null) {
+            await db.update(sublimationTable)
+              .set({ stock: product.stock + item.quantity })
+              .where(eq(sublimationTable.id, item.productId));
+          }
+        }
+      } else if (item.productType === "combo") {
+        const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+        if (combo) {
+          const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+          for (const cItem of comboItems) {
+            if (cItem.productType === "perfumeria") {
+              const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+              if (cProduct) {
+                await db.update(perfumeryTable)
+                  .set({ stock: cProduct.stock + (cItem.quantity * item.quantity) })
+                  .where(eq(perfumeryTable.id, cItem.productId));
+              }
+            } else if (cItem.productType === "sublimacion") {
+              const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+              if (cProduct) {
+                if (cProduct.stock !== null) {
+                  await db.update(sublimationTable)
+                    .set({ stock: cProduct.stock + (cItem.quantity * item.quantity) })
+                    .where(eq(sublimationTable.id, cItem.productId));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Eliminar registros de venta
+    await db.delete(salesTable).where(eq(salesTable.invoiceId, invoice.id));
+
+    // 3. Eliminar pagos asociados
+    await db.delete(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, invoice.id));
+
+    // 4. Eliminar asientos contables asociados
+    await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Invoice_${invoice.id}`));
+    await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${invoice.id}`));
+
+    // 5. Marcar como anulada en la base de datos
+    const [updated] = await db.update(invoicesTable)
+      .set({ status: "cancelada" })
+      .where(eq(invoicesTable.id, invoice.id))
+      .returning();
+
+    const updatedItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, invoice.id));
+    res.json(mapInvoice(updated, updatedItems));
+  } catch (err: any) {
+    console.error("Error al anular factura:", err);
+    res.status(500).json({ error: "Error al anular factura: " + err.message });
+  }
 });
 
 export default router;

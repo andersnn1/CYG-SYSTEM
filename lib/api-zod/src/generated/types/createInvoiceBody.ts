@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateInvoiceBodyPaymentMethod } from "./createInvoiceBodyPaymentMethod";
+import type { CreateInvoiceBodyStatus } from "./createInvoiceBodyStatus";
 import type { CreateInvoiceItemBody } from "./createInvoiceItemBody";
 
 export interface CreateInvoiceBody {
@@ -20,6 +21,7 @@ export interface CreateInvoiceBody {
   tax?: number;
   notes?: string;
   clientRtn?: string;
+  status?: CreateInvoiceBodyStatus;
   paymentMethod?: CreateInvoiceBodyPaymentMethod;
   transferReference?: string;
   issueDate: string;
