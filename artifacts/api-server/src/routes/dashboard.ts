@@ -69,8 +69,6 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 
   const totalIncome = realTotalRevenue;
   const totalCost = realTotalExpense;
-  const netProfit = realNetIncome;
-  const distributableProfit = realNetIncome;
   const monthlyExpenses = realTotalExpense;
   const monthlySales = realTotalRevenue;
 
@@ -84,12 +82,6 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const [lowSublimation] = await db.select({ count: sql<number>`COUNT(*)` }).from(sublimationTable)
     .where(sql`${sublimationTable.stock} IS NOT NULL AND ${sublimationTable.stock} < 5`);
   const lowStockCount = Number(lowPerfumery?.count ?? 0) + Number(lowSublimation?.count ?? 0);
-
-  const profitFirst = {
-    operacion: distributableProfit * 0.50,
-    dueno: distributableProfit * 0.40,
-    ganancia: distributableProfit * 0.10,
-  };
 
   // 3. Owner payout from invoices (status != cancelada)
   let invoicePayoutQuery = db.select({
@@ -113,6 +105,16 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const [invoicePayoutResult] = await invoicePayoutQuery;
   const monthlyRealProfit = Number(invoicePayoutResult?.ownerPayout ?? 0);
   const monthlyPartnerProfit = Number(invoicePayoutResult?.partnerPayout ?? 0);
+
+  // Distributable profit and net profit are based on the owner's net payout
+  const netProfit = monthlyRealProfit;
+  const distributableProfit = monthlyRealProfit;
+
+  const profitFirst = {
+    operacion: distributableProfit * 0.50,
+    dueno: distributableProfit * 0.40,
+    ganancia: distributableProfit * 0.10,
+  };
 
   // 4. Monthly Goal Query
   const goalMonth = isAllTime ? currentMonth : filterMonth;

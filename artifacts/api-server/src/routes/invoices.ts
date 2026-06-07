@@ -680,28 +680,86 @@ router.delete("/invoices/:id", async (req, res): Promise<void> => {
   const params = DeleteInvoiceParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
-  if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
+  try {
+    const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
+    if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
 
-  if (await isPeriodLocked(existing.issueDate)) {
-    res.status(400).json({ error: `El período contable para la fecha de esta factura (${existing.issueDate}) está cerrado.` });
-    return;
+    if (await isPeriodLocked(existing.issueDate)) {
+      res.status(400).json({ error: `El período contable para la fecha de esta factura (${existing.issueDate}) está cerrado.` });
+      return;
+    }
+
+    // 1. Revertir stock (devolver cantidades al inventario) si estaba confirmada o pagada
+    if (existing.status === "pendiente" || existing.status === "pagada") {
+      const items = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, existing.id));
+      for (const item of items) {
+        if (!item.productId || !item.productType) continue;
+
+        if (item.productType === "perfumeria") {
+          const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
+          if (product) {
+            await db.update(perfumeryTable)
+              .set({ stock: product.stock + item.quantity })
+              .where(eq(perfumeryTable.id, item.productId));
+          }
+        } else if (item.productType === "sublimacion") {
+          const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
+          if (product) {
+            if (product.stock !== null) {
+              await db.update(sublimationTable)
+                .set({ stock: product.stock + item.quantity })
+                .where(eq(sublimationTable.id, item.productId));
+            }
+          }
+        } else if (item.productType === "combo") {
+          const [combo] = await db.select().from(combosTable).where(eq(combosTable.id, item.productId));
+          if (combo) {
+            const comboItems = await db.select().from(comboItemsTable).where(eq(comboItemsTable.comboId, combo.id));
+            for (const cItem of comboItems) {
+              if (cItem.productType === "perfumeria") {
+                const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
+                if (cProduct) {
+                  await db.update(perfumeryTable)
+                    .set({ stock: cProduct.stock + (cItem.quantity * item.quantity) })
+                    .where(eq(perfumeryTable.id, cItem.productId));
+                }
+              } else if (cItem.productType === "sublimacion") {
+                const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
+                if (cProduct) {
+                  if (cProduct.stock !== null) {
+                    await db.update(sublimationTable)
+                      .set({ stock: cProduct.stock + (cItem.quantity * item.quantity) })
+                      .where(eq(sublimationTable.id, cItem.productId));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Eliminar registros de venta
+    await db.delete(salesTable).where(eq(salesTable.invoiceId, existing.id));
+
+    // 3. Eliminar pagos asociados
+    await db.delete(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, existing.id));
+
+    // 4. Eliminar asientos contables asociados
+    await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Invoice_${existing.id}`));
+    await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${existing.id}`));
+
+    // 5. Eliminar ítems de la factura
+    await db.delete(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, existing.id));
+
+    // 6. Eliminar la factura
+    await db.delete(invoicesTable).where(eq(invoicesTable.id, existing.id));
+
+    res.sendStatus(204);
+  } catch (err: any) {
+    console.error("Error al eliminar factura:", err);
+    res.status(500).json({ error: "Error al eliminar factura: " + err.message });
   }
-
-  // RESTRICCIÓN: No permitir eliminar facturas emitidas o pagadas
-  if (existing.status === "pendiente" || existing.status === "pagada") {
-    res.status(400).json({ error: "No se pueden eliminar facturas confirmadas/pagadas. Debe anularlas primero." });
-    return;
-  }
-
-  // Delete associated journal entries
-  await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Invoice_${params.data.id}`));
-  await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${params.data.id}`));
-
-  await db.delete(salesTable).where(eq(salesTable.invoiceId, params.data.id));
-  await db.delete(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, params.data.id));
-  await db.delete(invoicesTable).where(eq(invoicesTable.id, params.data.id));
-  res.sendStatus(204);
 });
 
 // POST /invoices/:id/cancel

@@ -2084,7 +2084,23 @@ export default function Facturas() {
                             >
                               -
                             </button>
-                            <span className="w-6 text-center text-xs font-mono font-bold">{it.quantity}</span>
+                            <input
+                              type="number"
+                              pattern="[0-9]*"
+                              inputMode="numeric"
+                              min="1"
+                              value={it.quantity === 0 ? "" : it.quantity}
+                              onChange={e => {
+                                const val = parseInt(e.target.value, 10);
+                                updateItem(i, "quantity", isNaN(val) ? 0 : val);
+                              }}
+                              onBlur={e => {
+                                if (it.quantity <= 0) {
+                                  updateItem(i, "quantity", 1);
+                                }
+                              }}
+                              className="w-10 text-center text-xs font-mono font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
                             <button
                               type="button"
                               onClick={() => handleIncrement(i)}
@@ -2743,7 +2759,23 @@ export default function Facturas() {
                             >
                               -
                             </button>
-                            <span className="w-5 text-center text-xs font-mono font-bold text-white">{qty}</span>
+                            <input
+                              type="number"
+                              pattern="[0-9]*"
+                              inputMode="numeric"
+                              min="0"
+                              value={qty === 0 ? "" : qty}
+                              onChange={e => {
+                                const val = parseInt(e.target.value, 10);
+                                handleUpdateInvoiceItemQty(p, isNaN(val) ? 0 : val);
+                              }}
+                              onBlur={e => {
+                                if (qty < 0) {
+                                  handleUpdateInvoiceItemQty(p, 0);
+                                }
+                              }}
+                              className="w-10 text-center text-xs font-mono font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
                             <button
                               type="button"
                               onClick={() => handleUpdateInvoiceItemQty(p, qty + 1)}

@@ -33,6 +33,7 @@ import {
   Scale,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Printer,
   ChevronsUpDown
 } from "lucide-react";
@@ -265,6 +266,76 @@ export default function Contabilidad() {
   // State for forms
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+
+  const [newTransfer, setNewTransfer] = useState({
+    type: "aporte_operativa" as "aporte_operativa" | "retencion_deuda" | "ajuste_socio" | "personalizado",
+    date: new Date().toISOString().split("T")[0],
+    amount: 0,
+    narration: "Aporte de utilidad personal a cuenta operativa para soporte de caja",
+    sourceAccountId: "",
+    destAccountId: "",
+    liabilityAccountId: "",
+    socioDestType: "1021" as "1021" | "1020",
+  });
+
+  const handleTransferTypeChange = (type: typeof newTransfer.type) => {
+    let narration = "";
+    if (type === "aporte_operativa") {
+      narration = "Aporte de utilidad personal a cuenta operativa para soporte de caja";
+    } else if (type === "retencion_deuda") {
+      narration = "Retención de utilidad para abono a préstamo/deuda";
+    } else if (type === "ajuste_socio") {
+      narration = "Ajuste de utilidad de socio: devolución de excedente de utilidad";
+    } else {
+      narration = "";
+    }
+
+    setNewTransfer(prev => ({
+      ...prev,
+      type,
+      narration,
+      sourceAccountId: type === "aporte_operativa" 
+        ? (accounts.find(a => a.code === "1021")?.id || "") 
+        : type === "ajuste_socio" 
+        ? (accounts.find(a => a.code === "5030")?.id || "") 
+        : prev.sourceAccountId,
+      destAccountId: type === "aporte_operativa" 
+        ? (accounts.find(a => a.code === "1020")?.id || "") 
+        : type === "ajuste_socio" 
+        ? (accounts.find(a => a.code === prev.socioDestType)?.id || "") 
+        : prev.destAccountId,
+    }));
+  };
+
+  const handleLiabilityAccountChange = (id: string) => {
+    setNewTransfer(prev => ({
+      ...prev,
+      liabilityAccountId: id,
+      destAccountId: id,
+    }));
+  };
+
+  const handleSocioDestTypeChange = (destType: "1021" | "1020") => {
+    setNewTransfer(prev => ({
+      ...prev,
+      socioDestType: destType,
+      destAccountId: accounts.find(a => a.code === destType)?.id || "",
+    }));
+  };
+
+  useEffect(() => {
+    if (accounts.length > 0 && !newTransfer.liabilityAccountId) {
+      const liabilityAcc = accounts.find(a => a.type === "Liability" && a.code === "2020") || accounts.find(a => a.type === "Liability");
+      if (liabilityAcc) {
+        setNewTransfer(prev => ({
+          ...prev,
+          liabilityAccountId: liabilityAcc.id,
+          destAccountId: prev.type === "retencion_deuda" ? liabilityAcc.id : prev.destAccountId
+        }));
+      }
+    }
+  }, [accounts, newTransfer.liabilityAccountId]);
 
   useEffect(() => {
     (window as any).__openNewEntry = () => {
@@ -298,6 +369,40 @@ export default function Contabilidad() {
     endDate: new Date().toISOString().split("T")[0],
   });
   const [selectedLedgerAccount, setSelectedLedgerAccount] = useState("");
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroupCollapse = (accountId: string) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [accountId]: !prev[accountId]
+    }));
+  };
+
+  const getAccountDepth = (account: any, allAccounts: any[]) => {
+    let depth = 0;
+    let current = account;
+    while (current.parentId) {
+      const parent = allAccounts.find(a => a.id === current.parentId);
+      if (!parent) break;
+      depth += 1;
+      current = parent;
+    }
+    return depth;
+  };
+
+  const isAccountVisible = (account: any, allAccounts: any[]) => {
+    let current = account;
+    while (current.parentId) {
+      if (collapsedGroups[current.parentId]) {
+        return false;
+      }
+      const parent = allAccounts.find(a => a.id === current.parentId);
+      if (!parent) break;
+      current = parent;
+    }
+    return true;
+  };
 
   // Report Queries
   const { data: balanceSheet, refetch: refetchBalanceSheet, isFetching: isFetchingBalance } = useQuery({
@@ -417,6 +522,89 @@ export default function Contabilidad() {
           { accountId: "", debit: 0, credit: 0 },
           { accountId: "", debit: 0, credit: 0 },
         ],
+      });
+      queryClient.invalidateQueries({ queryKey: ["journal-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["balance-sheet"] });
+      queryClient.invalidateQueries({ queryKey: ["income-statement"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleCreateTransfer = async () => {
+    const amount = Number(newTransfer.amount);
+    if (amount <= 0) {
+      toast({ title: "Error", description: "El monto debe ser mayor que cero.", variant: "destructive" });
+      return;
+    }
+
+    let srcId = "";
+    let dstId = "";
+    let narration = newTransfer.narration;
+
+    if (newTransfer.type === "aporte_operativa") {
+      srcId = accounts.find(a => a.code === "1021")?.id || "";
+      dstId = accounts.find(a => a.code === "1020")?.id || "";
+      if (!narration) narration = "Aporte de utilidad personal a cuenta operativa para soporte de caja";
+    } else if (newTransfer.type === "retencion_deuda") {
+      srcId = accounts.find(a => a.code === "1021")?.id || "";
+      dstId = newTransfer.liabilityAccountId;
+      if (!narration) narration = "Retención de utilidad para abono a préstamo/deuda";
+    } else if (newTransfer.type === "ajuste_socio") {
+      srcId = accounts.find(a => a.code === "5030")?.id || "";
+      dstId = accounts.find(a => a.code === newTransfer.socioDestType)?.id || "";
+      if (!narration) narration = "Ajuste de utilidad de socio: devolución de excedente de utilidad";
+    } else {
+      srcId = newTransfer.sourceAccountId;
+      dstId = newTransfer.destAccountId;
+      if (!narration) narration = "Ajuste contable manual";
+    }
+
+    if (!srcId) {
+      toast({ title: "Error", description: "Debe seleccionar la cuenta de origen.", variant: "destructive" });
+      return;
+    }
+    if (!dstId) {
+      toast({ title: "Error", description: "Debe seleccionar la cuenta de destino.", variant: "destructive" });
+      return;
+    }
+    if (srcId === dstId) {
+      toast({ title: "Error", description: "La cuenta de origen y destino no pueden ser la misma.", variant: "destructive" });
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newTransfer.date)) {
+      toast({ title: "Error", description: "La fecha debe tener formato YYYY-MM-DD", variant: "destructive" });
+      return;
+    }
+
+    const payload = {
+      date: newTransfer.date,
+      narration,
+      referenceSource: "Manual_Adjustment",
+      lines: [
+        { accountId: dstId, debit: amount, credit: 0 },
+        { accountId: srcId, debit: 0, credit: amount }
+      ]
+    };
+
+    try {
+      await apiFetch("/accounting/journal-entries", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      toast({ title: "Ajuste registrado", description: "El ajuste / transferencia interna se ha registrado con éxito." });
+      setTransferDialogOpen(false);
+      setNewTransfer({
+        type: "aporte_operativa",
+        date: new Date().toISOString().split("T")[0],
+        amount: 0,
+        narration: "Aporte de utilidad personal a cuenta operativa para soporte de caja",
+        sourceAccountId: "",
+        destAccountId: "",
+        liabilityAccountId: accounts.find(a => a.type === "Liability" && a.code === "2020")?.id || accounts.find(a => a.type === "Liability")?.id || "",
+        socioDestType: "1021",
       });
       queryClient.invalidateQueries({ queryKey: ["journal-entries"] });
       queryClient.invalidateQueries({ queryKey: ["balance-sheet"] });
@@ -772,10 +960,16 @@ export default function Contabilidad() {
         <TabsContent value="entries" className="space-y-6 outline-none">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <h2 className="text-lg font-bold">Asientos Registrados</h2>
-            <Button onClick={() => setEntryDialogOpen(true)} className="gap-2 h-10">
-              <Plus className="h-4 w-4" />
-              Nuevo Asiento Manual
-            </Button>
+            <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+              <Button onClick={() => setTransferDialogOpen(true)} variant="outline" className="gap-2 h-10 border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto">
+                <RefreshCw className="h-4 w-4" />
+                Registrar Ajuste / Transferencia
+              </Button>
+              <Button onClick={() => setEntryDialogOpen(true)} className="gap-2 h-10 w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Nuevo Asiento Manual
+              </Button>
+            </div>
           </div>
 
           {/* Filtros Rápidos */}
@@ -1443,15 +1637,38 @@ export default function Contabilidad() {
                 {/* ACTIVO */}
                 <div className="space-y-4">
                   <h3 className="text-base font-bold border-b pb-2 text-primary">ACTIVOS (Debe)</h3>
-                  <div className="space-y-2">
-                    {balanceSheet.assets.map((asset: any) => (
-                      <div key={asset.id} className="flex justify-between items-center gap-2 text-sm py-1 border-b border-muted/30 min-w-0">
-                        <span className="font-medium font-mono text-xs truncate" title={`${asset.code} - ${asset.name}`}>
-                          {asset.code} - {asset.name}
-                        </span>
-                        <span className="font-bold text-foreground shrink-0">{formatCurrency(asset.balance)}</span>
-                      </div>
-                    ))}
+                  <div className="space-y-1">
+                    {balanceSheet.assets.filter((asset: any) => isAccountVisible(asset, balanceSheet.assets)).map((asset: any) => {
+                      const depth = getAccountDepth(asset, balanceSheet.assets);
+                      const isCollapsed = collapsedGroups[asset.id];
+
+                      return (
+                        <div 
+                          key={asset.id} 
+                          className={`flex justify-between items-center gap-2 text-sm py-1.5 border-b border-muted/30 min-w-0 transition-colors ${
+                            asset.isGroup 
+                              ? "font-bold text-foreground bg-muted/20 hover:bg-muted/30 px-2 rounded-lg cursor-pointer" 
+                              : "text-muted-foreground/90 hover:bg-muted/10 px-1 rounded"
+                          }`}
+                          style={{ paddingLeft: `${asset.isGroup ? depth * 12 + 8 : depth * 12 + 24}px` }}
+                          onClick={asset.isGroup ? () => toggleGroupCollapse(asset.id) : undefined}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0 truncate">
+                            {asset.isGroup && (
+                              <span className="shrink-0 text-muted-foreground">
+                                {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              </span>
+                            )}
+                            <span className={`${asset.isGroup ? "font-bold text-slate-800 dark:text-slate-200" : "font-medium font-mono text-xs"} truncate`} title={`${asset.code} - ${asset.name}`}>
+                              {asset.code} - {asset.name}
+                            </span>
+                          </div>
+                          <span className={`shrink-0 ${asset.isGroup ? "font-extrabold text-foreground" : "font-bold text-muted-foreground"}`}>
+                            {formatCurrency(asset.balance)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="flex justify-between items-center bg-muted/30 p-3 rounded-lg border mt-4">
                     <span className="font-bold text-sm">TOTAL ACTIVOS</span>
@@ -1465,34 +1682,80 @@ export default function Contabilidad() {
                   <div className="space-y-4">
                     
                     {/* Pasivo */}
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pasivos</h4>
-                      {balanceSheet.liabilities.map((liab: any) => (
-                        <div key={liab.id} className="flex justify-between items-center gap-2 text-sm py-1 border-b border-muted/30 min-w-0">
-                          <span className="font-medium font-mono text-xs truncate" title={`${liab.code} - ${liab.name}`}>
-                            {liab.code} - {liab.name}
-                          </span>
-                          <span className="font-bold text-foreground shrink-0">{formatCurrency(liab.balance)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-xs font-bold pt-1">
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pasivos</h4>
+                      {balanceSheet.liabilities.filter((liab: any) => isAccountVisible(liab, balanceSheet.liabilities)).map((liab: any) => {
+                        const depth = getAccountDepth(liab, balanceSheet.liabilities);
+                        const isCollapsed = collapsedGroups[liab.id];
+
+                        return (
+                          <div 
+                            key={liab.id} 
+                            className={`flex justify-between items-center gap-2 text-sm py-1.5 border-b border-muted/30 min-w-0 transition-colors ${
+                              liab.isGroup 
+                                ? "font-bold text-foreground bg-muted/20 hover:bg-muted/30 px-2 rounded-lg cursor-pointer" 
+                                : "text-muted-foreground/90 hover:bg-muted/10 px-1 rounded"
+                            }`}
+                            style={{ paddingLeft: `${liab.isGroup ? depth * 12 + 8 : depth * 12 + 24}px` }}
+                            onClick={liab.isGroup ? () => toggleGroupCollapse(liab.id) : undefined}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                              {liab.isGroup && (
+                                <span className="shrink-0 text-muted-foreground">
+                                  {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                </span>
+                              )}
+                              <span className={`${liab.isGroup ? "font-bold text-slate-800 dark:text-slate-200" : "font-medium font-mono text-xs"} truncate`} title={`${liab.code} - ${liab.name}`}>
+                                {liab.code} - {liab.name}
+                              </span>
+                            </div>
+                            <span className={`shrink-0 ${liab.isGroup ? "font-extrabold text-foreground" : "font-bold text-muted-foreground"}`}>
+                              {formatCurrency(liab.balance)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-between text-xs font-bold pt-2">
                         <span>Total Pasivos</span>
                         <span>{formatCurrency(balanceSheet.totalLiabilities)}</span>
                       </div>
                     </div>
 
                     {/* Patrimonio */}
-                    <div className="space-y-2 pt-2 border-t border-muted/50">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Patrimonio</h4>
-                      {balanceSheet.equity.map((eqt: any) => (
-                        <div key={eqt.id} className="flex justify-between items-center gap-2 text-sm py-1 border-b border-muted/30 min-w-0">
-                          <span className="font-medium font-mono text-xs truncate" title={`${eqt.code} - ${eqt.name}`}>
-                            {eqt.code} - {eqt.name}
-                          </span>
-                          <span className="font-bold text-foreground shrink-0">{formatCurrency(eqt.balance)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-xs font-bold pt-1">
+                    <div className="space-y-1 pt-2 border-t border-muted/50">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Patrimonio</h4>
+                      {balanceSheet.equity.filter((eqt: any) => isAccountVisible(eqt, balanceSheet.equity)).map((eqt: any) => {
+                        const depth = getAccountDepth(eqt, balanceSheet.equity);
+                        const isCollapsed = collapsedGroups[eqt.id];
+
+                        return (
+                          <div 
+                            key={eqt.id} 
+                            className={`flex justify-between items-center gap-2 text-sm py-1.5 border-b border-muted/30 min-w-0 transition-colors ${
+                              eqt.isGroup 
+                                ? "font-bold text-foreground bg-muted/20 hover:bg-muted/30 px-2 rounded-lg cursor-pointer" 
+                                : "text-muted-foreground/90 hover:bg-muted/10 px-1 rounded"
+                            }`}
+                            style={{ paddingLeft: `${eqt.isGroup ? depth * 12 + 8 : depth * 12 + 24}px` }}
+                            onClick={eqt.isGroup ? () => toggleGroupCollapse(eqt.id) : undefined}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                              {eqt.isGroup && (
+                                <span className="shrink-0 text-muted-foreground">
+                                  {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                </span>
+                              )}
+                              <span className={`${eqt.isGroup ? "font-bold text-slate-800 dark:text-slate-200" : "font-medium font-mono text-xs"} truncate`} title={`${eqt.code} - ${eqt.name}`}>
+                                {eqt.code} - {eqt.name}
+                              </span>
+                            </div>
+                            <span className={`shrink-0 ${eqt.isGroup ? "font-extrabold text-foreground" : "font-bold text-muted-foreground"}`}>
+                              {formatCurrency(eqt.balance)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-between text-xs font-bold pt-2">
                         <span>Total Patrimonio</span>
                         <span>{formatCurrency(balanceSheet.totalEquity)}</span>
                       </div>
@@ -2116,6 +2379,384 @@ export default function Contabilidad() {
             <DialogFooter className="border-t pt-3">
               <Button variant="outline" onClick={() => setEntryDialogOpen(false)}>Cancelar</Button>
               <Button onClick={handleCreateEntry}>Registrar Asiento</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* 3. Transfer / Adjustment Dialog */}
+      {isMobile ? (
+        <Sheet open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+          <SheetContent 
+            side="bottom" 
+            style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}
+            className="h-[92dvh] sm:max-w-none flex flex-col rounded-t-2xl p-0 overflow-hidden transition-all duration-200"
+          >
+            <SheetHeader className="text-left border-b p-5 pb-3">
+              <div className="w-12 h-1 bg-muted rounded-full mx-auto mb-2" />
+              <SheetTitle>Ajuste / Transferencia Interna</SheetTitle>
+              <SheetDescription>Genera un asiento de ajuste contable rápido.</SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-24">
+              <div className="space-y-1">
+                <Label>Tipo de Ajuste *</Label>
+                <Select value={newTransfer.type} onValueChange={(v: any) => handleTransferTypeChange(v)}>
+                  <SelectTrigger className="w-full bg-background h-10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="aporte_operativa" className="text-xs">Aporte a Operativa (1021 ➔ 1020)</SelectItem>
+                    <SelectItem value="retencion_deuda" className="text-xs">Abono a Préstamo (1021 ➔ Pasivo)</SelectItem>
+                    <SelectItem value="ajuste_socio" className="text-xs">Ajuste de Utilidad de Socio (5030 ➔ 1021/1020)</SelectItem>
+                    <SelectItem value="personalizado" className="text-xs">Personalizado (Elegir Cuentas)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Fecha *</Label>
+                  <Input 
+                    type="date" 
+                    value={newTransfer.date} 
+                    onChange={e => setNewTransfer({ ...newTransfer, date: e.target.value })} 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Monto (L.) *</Label>
+                  <Input 
+                    type="number" 
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01" 
+                    placeholder="0.00"
+                    value={newTransfer.amount === 0 ? "" : newTransfer.amount} 
+                    onChange={e => setNewTransfer({ ...newTransfer, amount: parseFloat(e.target.value) || 0 })} 
+                    className="font-mono text-right"
+                  />
+                </div>
+              </div>
+
+              {/* Conditional Fields based on Type */}
+              {newTransfer.type === "retencion_deuda" && (
+                <div className="space-y-1 bg-muted/20 p-3 rounded-lg border">
+                  <Label>Cuenta de Préstamo / Pasivo *</Label>
+                  <Select value={newTransfer.liabilityAccountId} onValueChange={handleLiabilityAccountChange}>
+                    <SelectTrigger className="w-full bg-background h-10 text-xs">
+                      <SelectValue placeholder="Seleccionar cuenta de pasivo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.filter(a => a.type === "Liability").map(a => (
+                        <SelectItem key={a.id} value={a.id} className="text-xs">
+                          {a.code} — {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[10px] text-muted-foreground block mt-1">
+                    Se debitará la cuenta de pasivo (reduciendo la deuda) y se acreditará la cuenta de socio.
+                  </span>
+                </div>
+              )}
+
+              {newTransfer.type === "ajuste_socio" && (
+                <div className="space-y-2.5 bg-muted/20 p-3 rounded-lg border">
+                  <Label className="text-xs">Destino de la Devolución *</Label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="socioDestTypeMobile" 
+                        value="1021" 
+                        checked={newTransfer.socioDestType === "1021"}
+                        onChange={() => handleSocioDestTypeChange("1021")}
+                        className="h-4 w-4 text-primary"
+                      />
+                      Cuenta Personal/Dueño (1021)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="socioDestTypeMobile" 
+                        value="1020" 
+                        checked={newTransfer.socioDestType === "1020"}
+                        onChange={() => handleSocioDestTypeChange("1020")}
+                        className="h-4 w-4 text-primary"
+                      />
+                      Cuenta Operativa (1020)
+                    </label>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground block mt-1">
+                    Acredita la cuenta de distribución (5030) reduciendo el gasto del socio, y debita el destino seleccionado.
+                  </span>
+                </div>
+              )}
+
+              {newTransfer.type === "personalizado" && (
+                <div className="space-y-3 bg-muted/20 p-3 rounded-lg border">
+                  <div className="space-y-1">
+                    <Label>Cuenta Destino (Debe / Débito) *</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={newTransfer.destAccountId}
+                      onChange={v => setNewTransfer(prev => ({ ...prev, destAccountId: v }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Cuenta Origen (Haber / Crédito) *</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={newTransfer.sourceAccountId}
+                      onChange={v => setNewTransfer(prev => ({ ...prev, sourceAccountId: v }))}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label>Descripción / Narración (Opcional)</Label>
+                <Input 
+                  value={newTransfer.narration} 
+                  onChange={e => setNewTransfer({ ...newTransfer, narration: e.target.value })} 
+                  placeholder={
+                    newTransfer.type === "aporte_operativa" ? "Aporte de utilidad personal a cuenta operativa para soporte de caja" :
+                    newTransfer.type === "retencion_deuda" ? "Retención de utilidad para abono a préstamo/deuda" :
+                    newTransfer.type === "ajuste_socio" ? "Ajuste de utilidad de socio: devolución de excedente de utilidad" :
+                    "Descripción del asiento..."
+                  } 
+                />
+              </div>
+
+              {/* Visual Journal Entry Preview */}
+              <div className="border rounded-xl bg-card overflow-hidden shadow-sm mt-3">
+                <div className="px-3 py-2 bg-muted/50 border-b text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                  Vista Previa Contable (Partida Doble)
+                </div>
+                <div className="p-3 space-y-2 text-xs">
+                  {(() => {
+                    const srcAcc = accounts.find(a => a.id === (
+                      newTransfer.type === "aporte_operativa" ? accounts.find(x => x.code === "1021")?.id :
+                      newTransfer.type === "retencion_deuda" ? accounts.find(x => x.code === "1021")?.id :
+                      newTransfer.type === "ajuste_socio" ? accounts.find(x => x.code === "5030")?.id :
+                      newTransfer.sourceAccountId
+                    ));
+                    const dstAcc = accounts.find(a => a.id === (
+                      newTransfer.type === "aporte_operativa" ? accounts.find(x => x.code === "1020")?.id :
+                      newTransfer.type === "retencion_deuda" ? newTransfer.liabilityAccountId :
+                      newTransfer.type === "ajuste_socio" ? accounts.find(x => x.code === newTransfer.socioDestType)?.id :
+                      newTransfer.destAccountId
+                    ));
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center bg-green-500/5 border border-green-500/10 p-2 rounded">
+                          <div className="min-w-0">
+                            <span className="font-mono text-[10px] text-green-600 block">DEBIT (DEBE)</span>
+                            <span className="font-bold truncate text-foreground">{dstAcc ? `${dstAcc.code} - ${dstAcc.name}` : "(Cuenta Destino)"}</span>
+                          </div>
+                          <span className="font-mono font-bold text-green-600">L. {newTransfer.amount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-blue-500/5 border border-blue-500/10 p-2 rounded pl-6">
+                          <div className="min-w-0">
+                            <span className="font-mono text-[10px] text-blue-600 block">CREDIT (HABER)</span>
+                            <span className="font-bold truncate text-foreground">{srcAcc ? `└─ ${srcAcc.code} - ${srcAcc.name}` : "(Cuenta Origen)"}</span>
+                          </div>
+                          <span className="font-mono font-bold text-blue-600">L. {newTransfer.amount.toFixed(2)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-background border-t p-4 grid grid-cols-2 gap-2 safe-area-bottom z-30">
+              <Button variant="outline" className="h-11 cursor-pointer" onClick={() => { setNewTransfer(prev => ({ ...prev, amount: 0 })); setTransferDialogOpen(false); }}>Cancelar</Button>
+              <Button className="h-11 bg-primary text-primary-foreground cursor-pointer" onClick={handleCreateTransfer}>Registrar Ajuste</Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Registrar Ajuste / Transferencia Interna</DialogTitle>
+              <DialogDescription>
+                Crea un movimiento entre cuentas para ajustar utilidades, amortizar deudas o aportar capital.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 my-2">
+              <div className="space-y-1">
+                <Label>Tipo de Ajuste *</Label>
+                <Select value={newTransfer.type} onValueChange={(v: any) => handleTransferTypeChange(v)}>
+                  <SelectTrigger className="w-full bg-background h-10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="aporte_operativa" className="text-xs">Aporte de Utilidad a Operativa (1021 ➔ 1020)</SelectItem>
+                    <SelectItem value="retencion_deuda" className="text-xs">Abono a Préstamo (1021 ➔ Pasivo)</SelectItem>
+                    <SelectItem value="ajuste_socio" className="text-xs">Ajuste de Utilidad de Socio (5030 ➔ 1021/1020)</SelectItem>
+                    <SelectItem value="personalizado" className="text-xs">Personalizado (Elegir Cuentas)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Fecha del Ajuste *</Label>
+                  <Input 
+                    type="date" 
+                    value={newTransfer.date} 
+                    onChange={e => setNewTransfer({ ...newTransfer, date: e.target.value })} 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Monto a Registrar (L.) *</Label>
+                  <Input 
+                    type="number" 
+                    min="0"
+                    step="0.01" 
+                    placeholder="0.00"
+                    value={newTransfer.amount === 0 ? "" : newTransfer.amount} 
+                    onChange={e => setNewTransfer({ ...newTransfer, amount: parseFloat(e.target.value) || 0 })} 
+                    className="font-mono text-right"
+                  />
+                </div>
+              </div>
+
+              {/* Conditional Fields based on Type */}
+              {newTransfer.type === "retencion_deuda" && (
+                <div className="space-y-1 bg-muted/20 p-3 rounded-lg border">
+                  <Label>Cuenta de Pasivo (Deuda) *</Label>
+                  <Select value={newTransfer.liabilityAccountId} onValueChange={handleLiabilityAccountChange}>
+                    <SelectTrigger className="w-full bg-background h-9 text-xs">
+                      <SelectValue placeholder="Seleccionar cuenta de pasivo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.filter(a => a.type === "Liability").map(a => (
+                        <SelectItem key={a.id} value={a.id} className="text-xs">
+                          {a.code} — {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[10px] text-muted-foreground block mt-1">
+                    Esto debitará la cuenta de pasivo (amortizando la deuda) y acreditará la cuenta personal del dueño.
+                  </span>
+                </div>
+              )}
+
+              {newTransfer.type === "ajuste_socio" && (
+                <div className="space-y-2 bg-muted/20 p-3 rounded-lg border">
+                  <Label className="text-xs">Destino de la Reclasificación *</Label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="socioDestType" 
+                        value="1021" 
+                        checked={newTransfer.socioDestType === "1021"}
+                        onChange={() => handleSocioDestTypeChange("1021")}
+                        className="h-4 w-4 text-primary"
+                      />
+                      Cuenta Personal/Dueño (1021)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="socioDestType" 
+                        value="1020" 
+                        checked={newTransfer.socioDestType === "1020"}
+                        onChange={() => handleSocioDestTypeChange("1020")}
+                        className="h-4 w-4 text-primary"
+                      />
+                      Cuenta Operativa (1020)
+                    </label>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground block mt-1">
+                    Esto debitará la cuenta de destino y acreditará la cuenta de Distribución a Socio (5030), reduciendo el gasto reportado del socio.
+                  </span>
+                </div>
+              )}
+
+              {newTransfer.type === "personalizado" && (
+                <div className="space-y-3 bg-muted/20 p-3 rounded-lg border">
+                  <div className="space-y-1">
+                    <Label>Cuenta Destino (Debe / Débito) *</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={newTransfer.destAccountId}
+                      onChange={v => setNewTransfer(prev => ({ ...prev, destAccountId: v }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Cuenta Origen (Haber / Crédito) *</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={newTransfer.sourceAccountId}
+                      onChange={v => setNewTransfer(prev => ({ ...prev, sourceAccountId: v }))}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label>Descripción / Narración (Opcional)</Label>
+                <Input 
+                  value={newTransfer.narration} 
+                  onChange={e => setNewTransfer({ ...newTransfer, narration: e.target.value })} 
+                  placeholder="Escriba el concepto del ajuste..." 
+                />
+              </div>
+
+              {/* Visual Journal Entry Preview */}
+              <div className="border rounded-xl bg-card overflow-hidden shadow-sm mt-2">
+                <div className="px-3 py-1.5 bg-muted/40 border-b text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                  Desglose del Asiento Contable
+                </div>
+                <div className="p-3 space-y-2 text-xs">
+                  {(() => {
+                    const srcAcc = accounts.find(a => a.id === (
+                      newTransfer.type === "aporte_operativa" ? accounts.find(x => x.code === "1021")?.id :
+                      newTransfer.type === "retencion_deuda" ? accounts.find(x => x.code === "1021")?.id :
+                      newTransfer.type === "ajuste_socio" ? accounts.find(x => x.code === "5030")?.id :
+                      newTransfer.sourceAccountId
+                    ));
+                    const dstAcc = accounts.find(a => a.id === (
+                      newTransfer.type === "aporte_operativa" ? accounts.find(x => x.code === "1020")?.id :
+                      newTransfer.type === "retencion_deuda" ? newTransfer.liabilityAccountId :
+                      newTransfer.type === "ajuste_socio" ? accounts.find(x => x.code === newTransfer.socioDestType)?.id :
+                      newTransfer.destAccountId
+                    ));
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center bg-green-500/5 border border-green-500/10 p-2 rounded">
+                          <div className="min-w-0">
+                            <span className="font-mono text-[9px] text-green-600 block">DEBIT (DEBE)</span>
+                            <span className="font-bold truncate text-foreground">{dstAcc ? `${dstAcc.code} - ${dstAcc.name}` : "(Cuenta Destino)"}</span>
+                          </div>
+                          <span className="font-mono font-bold text-green-600">L. {newTransfer.amount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-blue-500/5 border border-blue-500/10 p-2 rounded pl-6">
+                          <div className="min-w-0">
+                            <span className="font-mono text-[9px] text-blue-600 block">CREDIT (HABER)</span>
+                            <span className="font-bold truncate text-foreground">{srcAcc ? `└─ ${srcAcc.code} - ${srcAcc.name}` : "(Cuenta Origen)"}</span>
+                          </div>
+                          <span className="font-mono font-bold text-blue-600">L. {newTransfer.amount.toFixed(2)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+            </div>
+
+            <DialogFooter className="border-t pt-3">
+              <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreateTransfer}>Registrar Ajuste</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
