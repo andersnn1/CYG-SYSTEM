@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, departments } from "@/lib/format";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Plus, Trash2, ClipboardList, CheckCircle, XCircle, Clock,
-  Search, X, ChevronDown, ChevronUp, ArrowLeft, Send, FileText, Printer, Download, MessageCircle, AlertTriangle
+  Search, X, ChevronDown, ChevronUp, ArrowLeft, Send, FileText, Printer, Download, MessageCircle, AlertTriangle, Package
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -70,6 +71,9 @@ interface ProductOption {
   stock: number;
   comboItems?: any[];
   fixedPrice?: number | null;
+  brand?: string;
+  ml?: number;
+  subType?: string;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -573,6 +577,9 @@ export default function Cotizaciones() {
   const printWinRef = useRef<Window | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [itemSearchQuery, setItemSearchQuery] = useState("");
+  const [catFilter, setCatFilter] = useState<string>("all");
 
   /**
    * Abre la ventana de impresión ANTES del fetch (gesto de usuario) para
@@ -617,10 +624,11 @@ export default function Cotizaciones() {
   useEffect(() => {
     async function loadProducts() {
       try {
-        const [perf, sub, combos] = await Promise.all([
+        const [perf, sub, combos, cust] = await Promise.all([
           apiFetch("/perfumery"),
           apiFetch("/sublimation"),
           apiFetch("/combos"),
+          apiFetch("/custom-inventory").catch(() => []),
         ]);
         const perfOpts: ProductOption[] = (Array.isArray(perf) ? perf : []).map((p: any) => ({
           id: p.id,
@@ -629,6 +637,8 @@ export default function Cotizaciones() {
           type: "perfumeria" as const,
           code: p.code ?? null,
           stock: Number(p.stock ?? 0),
+          brand: p.brand,
+          ml: p.ml,
         }));
         const subOpts: ProductOption[] = (Array.isArray(sub) ? sub : []).map((s: any) => ({
           id: s.id,
@@ -637,6 +647,8 @@ export default function Cotizaciones() {
           type: "sublimacion" as const,
           code: s.code ?? null,
           stock: Number(s.stock ?? 0),
+          brand: "Varios",
+          subType: s.itemType,
         }));
         const comboOpts: ProductOption[] = (Array.isArray(combos) ? combos : []).map((c: any) => ({
           id: c.id,
@@ -647,8 +659,19 @@ export default function Cotizaciones() {
           stock: 999,
           comboItems: c.items,
           fixedPrice: c.fixedPrice != null ? Number(c.fixedPrice) : null,
+          brand: "C&G Combo",
         }));
-        setProducts([...perfOpts, ...subOpts, ...comboOpts]);
+        const customOpts: ProductOption[] = (Array.isArray(cust) ? cust : []).map((c: any) => ({
+          id: c.id,
+          label: c.name,
+          price: Number(c.salePrice ?? 0),
+          type: "sublimacion" as const,
+          code: c.code ?? null,
+          stock: Number(c.stock ?? 0),
+          brand: c.brand || "Personalizado",
+          subType: c.categoryName || "Otros",
+        }));
+        setProducts([...perfOpts, ...subOpts, ...comboOpts, ...customOpts]);
       } catch { /* products unavailable */ }
     }
     loadProducts();
@@ -665,6 +688,10 @@ export default function Cotizaciones() {
           const lastIdx = form.items.length - 1;
           const searchInput = document.getElementById(`product-search-input-${lastIdx}`);
           searchInput?.focus();
+          break;
+        case "F3":
+          e.preventDefault();
+          setProductModalOpen(true);
           break;
         case "F4":
           e.preventDefault();
@@ -686,7 +713,7 @@ export default function Cotizaciones() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [view, form.items.length, form.clientName, form.clientRtn]);
+  }, [view, form.items.length, form.clientName, form.clientRtn, productModalOpen]);
 
 
   const loadQuotes = async () => {
@@ -897,6 +924,45 @@ export default function Cotizaciones() {
 
   const removeItem = (i: number) =>
     setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
+
+  const getQuoteItemQty = (p: ProductOption) => {
+    const idx = form.items.findIndex(it => it.productId === p.id && it.productType === p.type);
+    return idx !== -1 ? form.items[idx].quantity : 0;
+  };
+
+  const handleUpdateQuoteItemQty = (p: ProductOption, newQty: number) => {
+    setForm(f => {
+      let items = [...f.items];
+      const idx = items.findIndex(it => it.productId === p.id && it.productType === p.type);
+      
+      if (idx !== -1) {
+        if (newQty <= 0) {
+          items = items.filter((_, i) => i !== idx);
+        } else {
+          items[idx] = { ...items[idx], quantity: newQty };
+        }
+      } else if (newQty > 0) {
+        const newItem: ItemForm = {
+          description: p.label,
+          quantity: newQty,
+          unitPrice: p.price,
+          productId: p.id,
+          productType: p.type,
+        };
+        const emptyIdx = items.findIndex(it => !it.description.trim());
+        if (emptyIdx !== -1) {
+          items[emptyIdx] = newItem;
+        } else {
+          items.push(newItem);
+        }
+      }
+      
+      if (items.length === 0 || items[items.length - 1].description !== "") {
+        items.push({ description: "", quantity: 1, unitPrice: 0 });
+      }
+      return { ...f, items };
+    });
+  };
 
   const subtotal = form.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
   const total    = subtotal - form.discount + form.tax;
@@ -1347,6 +1413,224 @@ export default function Cotizaciones() {
   // ─── FORM VIEW ────────────────────────────────────────────────────────────────
   const currentStatus = editingQuote?.status ?? "pendiente";
 
+  const renderProductCatalogModal = () => (
+    <Dialog open={productModalOpen} onOpenChange={setProductModalOpen}>
+      <DialogContent className="w-full h-[100dvh] sm:h-auto max-w-full sm:max-w-4xl p-0 overflow-hidden border-none sm:border sm:border-white/10 shadow-2xl bg-slate-950 text-slate-100 flex flex-col animate-in fade-in duration-200 sm:!zoom-in-100 sm:!slide-in-from-top-[50%] sm:!slide-in-from-left-[50%]">
+        <div className="p-4 sm:p-6 border-b border-white/5 bg-slate-900/50 shrink-0">
+          <div className="flex justify-between items-center mb-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600/20 rounded-lg shrink-0">
+                <Package className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black uppercase tracking-widest text-white leading-none">Catálogo Maestro</h2>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Búsqueda rápida [F3]</p>
+              </div>
+            </div>
+            <div className="flex flex-col items-end opacity-50">
+               <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">C&G Electronics</span>
+               <span className="text-[8px] font-bold text-slate-600 uppercase">v2.4 POS</span>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <Input
+              autoFocus className="h-12 pl-12 bg-slate-900 border-white/10 text-white text-base placeholder:text-slate-600 focus:ring-2 focus:ring-blue-500 transition-all"
+              placeholder="Escribe nombre, marca o código..."
+              value={itemSearchQuery}
+              onChange={e => setItemSearchQuery(e.target.value)}
+            />
+          </div>
+          {/* Categorías */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pt-4 no-scrollbar">
+             {(["all", "perfumeria", "combo", "maquinaria", "consumible"] as const).map(c => {
+                const labels = {
+                  all: "Todos",
+                  perfumeria: "Perfumería",
+                  combo: "Combos",
+                  maquinaria: "Maquinaria",
+                  consumible: "Consumibles"
+                };
+                const active = catFilter === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCatFilter(c)}
+                    className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${active ? "bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]" : "bg-slate-900 text-slate-500 border-white/5 hover:text-slate-300"}`}
+                  >
+                    {labels[c]}
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            {products
+              .filter(p => {
+                // Categoría filter
+                const matchesCat = catFilter === "all" ||
+                  (catFilter === "perfumeria" && p.type === "perfumeria") ||
+                  (catFilter === "combo" && p.type === "combo") ||
+                  (catFilter === "maquinaria" && p.subType === "maquinaria") ||
+                  (catFilter === "consumible" && (p.type === "sublimacion" && p.subType !== "maquinaria"));
+
+                if (!matchesCat) return false;
+                if (!itemSearchQuery) return true;
+                const q = itemSearchQuery.toLowerCase();
+                return (
+                  p.label.toLowerCase().includes(q) ||
+                  p.code?.toLowerCase().includes(q) ||
+                  p.brand?.toLowerCase().includes(q) ||
+                  p.type.toLowerCase().includes(q)
+                );
+              })
+              .map(p => isMobile ? (
+                <div
+                  key={`${p.type}-${p.id}`}
+                  className="flex items-center justify-between p-3.5 bg-slate-900/60 border border-white/5 rounded-2xl gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 shrink-0">
+                      <Package className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {p.brand && <span className="text-[8px] font-black uppercase text-blue-400 tracking-widest">{p.brand}</span>}
+                        {p.ml && <span className="text-[8px] font-bold text-slate-500 bg-white/5 px-1 rounded">{p.ml}ml</span>}
+                        {p.stock !== null && p.stock <= 0 && <span className="text-[8px] font-bold text-red-400 bg-red-500/10 px-1 rounded">Agotado</span>}
+                      </div>
+                      <p className="font-bold text-xs text-white truncate max-w-[150px] leading-tight">
+                        {p.type === "combo" ? `COMBO: ${p.label}` : p.label}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[9px] font-mono text-slate-500">#{p.code || p.id}</span>
+                        <span className="text-[9.5px] font-mono font-bold text-blue-400">{formatCurrency(p.price)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="shrink-0">
+                    {p.type === "combo" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 px-3 text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95"
+                        onClick={() => {
+                          const emptyIdx = form.items.findIndex(it => !it.description.trim());
+                          const targetIdx = emptyIdx === -1 ? form.items.length : emptyIdx;
+                          selectProduct(targetIdx, p);
+                          toast({ title: "Combo añadido", description: p.label });
+                        }}
+                      >
+                        + Combo
+                      </Button>
+                    ) : (() => {
+                      const qty = getQuoteItemQty(p);
+                      if (qty === 0) {
+                        return (
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-8 px-3 text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95"
+                            onClick={() => handleUpdateQuoteItemQty(p, 1)}
+                          >
+                            + Añadir
+                          </Button>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center bg-slate-800 rounded-lg border border-white/10 h-8 px-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuoteItemQty(p, qty - 1)}
+                            className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-white font-black text-xs active:scale-75"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            pattern="[0-9]*"
+                            inputMode="numeric"
+                            min="0"
+                            value={qty === 0 ? "" : qty}
+                            onChange={e => {
+                              const val = parseInt(e.target.value, 10);
+                              handleUpdateQuoteItemQty(p, isNaN(val) ? 0 : val);
+                            }}
+                            onBlur={e => {
+                              if (qty < 0) {
+                                handleUpdateQuoteItemQty(p, 0);
+                              }
+                            }}
+                            className="w-10 text-center text-xs font-mono font-bold bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuoteItemQty(p, qty + 1)}
+                            className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-white font-black text-xs active:scale-75"
+                          >
+                            +
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              ) : (
+                <button
+                  key={`${p.type}-${p.id}`}
+                  type="button"
+                  className="flex items-stretch gap-4 p-4 bg-slate-900/60 hover:bg-blue-600/10 border border-white/5 rounded-2xl transition-all hover:border-blue-500/50 group text-left relative overflow-hidden min-h-[110px]"
+                  onClick={() => {
+                    const emptyIdx = form.items.findIndex(it => it.description === "");
+                    const targetIdx = emptyIdx === -1 ? form.items.length : emptyIdx;
+                    selectProduct(targetIdx, p);
+                    setProductModalOpen(false);
+                    setItemSearchQuery("");
+                  }}
+                >
+                  <div className="flex flex-col items-center gap-2 shrink-0 justify-center">
+                    <div className="h-12 w-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
+                      <Package className="h-6 w-6" />
+                    </div>
+                    <div className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${p.type === "perfumeria" ? "bg-purple-600/20 text-purple-400 border border-purple-500/30" : p.type === "combo" ? "bg-amber-600/20 text-amber-400 border border-amber-500/30" : "bg-blue-600/20 text-blue-400 border border-blue-500/30"} whitespace-nowrap`}>
+                      {p.type}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex items-center gap-2 mb-1">
+                      {p.brand && <span className="text-[8px] font-black uppercase text-blue-500 tracking-widest">{p.brand}</span>}
+                      {p.ml && <span className="text-[8px] font-bold text-slate-500 bg-white/5 px-1 rounded">{p.ml}ml</span>}
+                    </div>
+                    <div className="font-black text-[11px] uppercase text-slate-200 group-hover:text-white leading-tight mb-1 break-words line-clamp-2 min-h-[1.5em]">
+                      {p.type === "combo" ? `COMBO: ${p.label}` : p.label}
+                    </div>
+                    <div className="text-[9px] font-mono text-slate-600 group-hover:text-blue-400">#{p.code || p.id}</div>
+                    <div className="mt-auto pt-3 flex items-center justify-between border-t border-white/5">
+                       <span className="text-[13px] font-mono font-black text-blue-400">{formatCurrency(p.price)}</span>
+                       <div className="flex items-center gap-1.5">
+                          <div className={`h-1.5 w-1.5 rounded-full ${p.stock > 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+                          <span className={`text-[9px] font-black uppercase ${p.stock > 0 ? "text-emerald-500/80" : "text-red-600/80"}`}>
+                            {p.stock > 0 ? `${p.stock} STOCK` : "OUT"}
+                          </span>
+                       </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+        </div>
+        <div className="p-4 sm:p-6 bg-slate-900/50 border-t border-white/5 flex justify-between items-center shrink-0">
+           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-4">
+              <span className="flex items-center gap-1.5"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">↑↓</kbd> Navegar</span>
+              <span className="flex items-center gap-1.5"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">ENTER</kbd> Seleccionar</span>
+           </div>
+           <Button variant="ghost" className="font-black uppercase tracking-widest text-[10px] text-slate-400 hover:text-white hover:bg-white/5" onClick={() => setProductModalOpen(false)}>Cerrar [ESC]</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (isMobile) {
     return (
       <div {...swipeHandlers} className="flex flex-col min-h-[calc(100vh-4rem)] bg-background animate-in fade-in duration-200">
@@ -1467,7 +1751,12 @@ export default function Cotizaciones() {
           </div>
 
           <div className="bg-card border rounded-xl p-4 space-y-4">
-            <h3 className="font-bold text-xs uppercase text-muted-foreground border-b pb-2">Líneas de Cotización</h3>
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-bold text-xs uppercase text-muted-foreground">Líneas de Cotización</h3>
+              <Button variant="outline" size="sm" className="h-8 text-[9px] font-bold uppercase cursor-pointer" onClick={() => setProductModalOpen(true)}>
+                <Package className="h-3 w-3 mr-1" /> Catálogo
+              </Button>
+            </div>
             <div className="space-y-4 divide-y">
               {form.items.map((it, i) => (
                 <div key={i} className="pt-3 first:pt-0 space-y-2">
@@ -1490,7 +1779,16 @@ export default function Cotizaciones() {
                     {itemDropOpen[i] && (
                       <div className="absolute left-0 right-0 top-10 z-50 bg-card border rounded-lg shadow-xl max-h-48 overflow-y-auto p-1">
                         {products
-                          .filter(p => !itemSearch[i] || p.label.toLowerCase().includes(itemSearch[i].toLowerCase()) || p.code?.toLowerCase().includes(itemSearch[i].toLowerCase()))
+                          .filter(p => {
+                            if (!itemSearch[i]) return true;
+                            const q = itemSearch[i].toLowerCase();
+                            return (
+                              p.label.toLowerCase().includes(q) ||
+                              p.code?.toLowerCase().includes(q) ||
+                              p.brand?.toLowerCase().includes(q) ||
+                              p.type.toLowerCase().includes(q)
+                            );
+                          })
                           .map(p => (
                             <button key={p.id} className="w-full text-left px-2 py-1.5 hover:bg-muted text-xs rounded truncate block" onClick={() => selectProduct(i, p)}>
                               {p.label} - {formatCurrency(p.price)} (Stock: {p.stock})
@@ -1516,9 +1814,14 @@ export default function Cotizaciones() {
                 </div>
               ))}
             </div>
-            <Button variant="outline" size="sm" className="w-full h-9.5 gap-1.5 border-dashed border-primary/30 text-primary uppercase font-bold text-[10px] cursor-pointer" onClick={addItem}>
-              <Plus className="h-3.5 w-3.5" /> Añadir Fila
-            </Button>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <Button variant="outline" size="sm" className="w-full h-9.5 gap-1.5 border-dashed border-primary/30 text-primary uppercase font-bold text-[10px] cursor-pointer" onClick={addItem}>
+                <Plus className="h-3.5 w-3.5" /> Añadir Fila
+              </Button>
+              <Button variant="outline" size="sm" className="w-full h-9.5 gap-1.5 border-dashed border-blue-500/30 text-blue-500 hover:bg-blue-500/5 uppercase font-bold text-[10px] cursor-pointer" onClick={() => setProductModalOpen(true)}>
+                <Package className="h-3.5 w-3.5" /> + Catálogo
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -1531,6 +1834,7 @@ export default function Cotizaciones() {
             {submitting ? "Guardando..." : "Guardar Cotización"}
           </Button>
         </div>
+        {renderProductCatalogModal()}
       </div>
     );
   }
@@ -1558,6 +1862,13 @@ export default function Cotizaciones() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            className="gap-1.5 font-semibold text-blue-600 border-blue-300 hover:bg-blue-50"
+            onClick={() => setProductModalOpen(true)}
+          >
+            <Package className="h-4 w-4" /> Productos [F3]
+          </Button>
           <Button variant="outline" className="font-semibold" onClick={handleSubmit} disabled={submitting}>
             {submitting ? "Guardando..." : "Guardar"}
           </Button>
@@ -1775,9 +2086,16 @@ export default function Cotizaciones() {
             <h2 className="font-bold text-foreground text-sm uppercase tracking-wide">Ítems</h2>
 
             {form.items.map((item, i) => {
-              const filteredProducts = products.filter(p =>
-                !itemSearch[i] || p.label.toLowerCase().includes(itemSearch[i].toLowerCase())
-              ).slice(0, 8);
+              const filteredProducts = products.filter(p => {
+                if (!itemSearch[i]) return true;
+                const q = itemSearch[i].toLowerCase();
+                return (
+                  p.label.toLowerCase().includes(q) ||
+                  p.code?.toLowerCase().includes(q) ||
+                  p.brand?.toLowerCase().includes(q) ||
+                  p.type.toLowerCase().includes(q)
+                );
+              }).slice(0, 8);
 
               return (
                 <div key={i} className="relative border border-border rounded-lg p-4 space-y-3 bg-background">
@@ -1811,9 +2129,16 @@ export default function Cotizaciones() {
                           updateItem(i, "description", val);
                         }}
                         onKeyDown={e => {
-                          const filtered = products.filter(p =>
-                            !itemSearch[i] || p.label.toLowerCase().includes(itemSearch[i].toLowerCase())
-                          ).slice(0, 8);
+                          const filtered = products.filter(p => {
+                            if (!itemSearch[i]) return true;
+                            const q = itemSearch[i].toLowerCase();
+                            return (
+                              p.label.toLowerCase().includes(q) ||
+                              p.code?.toLowerCase().includes(q) ||
+                              p.brand?.toLowerCase().includes(q) ||
+                              p.type.toLowerCase().includes(q)
+                            );
+                          }).slice(0, 8);
 
                           if (itemDropOpen[i] && filtered.length > 0) {
                             const currentIdx = highlightedItemIndex[i] || 0;
@@ -1907,9 +2232,14 @@ export default function Cotizaciones() {
               );
             })}
 
-            <Button type="button" variant="outline" onClick={addItem} className="w-full gap-2 border-dashed">
-              <Plus className="h-4 w-4" /> Agregar Ítem
-            </Button>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" onClick={addItem} className="flex-1 gap-2 border-dashed">
+                <Plus className="h-4 w-4" /> Agregar Ítem
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setProductModalOpen(true)} className="flex-1 gap-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50">
+                <Package className="h-4 w-4" /> + Catálogo
+              </Button>
+            </div>
           </section>
 
           {/* Notas */}
@@ -2097,6 +2427,8 @@ export default function Cotizaciones() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {renderProductCatalogModal()}
     </div>
   );
 }
