@@ -13,4 +13,5 @@ export interface CreateInvoiceItemBody {
   unitPrice: number;
   productId?: number;
   productType?: CreateInvoiceItemBodyProductType;
+  costPrice?: number;
 }

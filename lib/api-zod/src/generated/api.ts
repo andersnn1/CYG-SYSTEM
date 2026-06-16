@@ -600,6 +600,7 @@ export const ListInvoicesResponseItem = zod.object({
   transportista: zod.string().nullish(),
   fotoGuiaPath: zod.string().nullish(),
   estadoEntrega: zod.string(),
+  isBackToBack: zod.boolean().optional(),
   items: zod
     .array(
       zod.object({
@@ -609,6 +610,7 @@ export const ListInvoicesResponseItem = zod.object({
         quantity: zod.number(),
         unitPrice: zod.number(),
         total: zod.number(),
+        costPrice: zod.number().optional(),
       }),
     )
     .optional(),
@@ -635,6 +637,7 @@ export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
  */
 export const CreateInvoiceBody = zod.object({
   clientId: zod.number().optional(),
+  isBackToBack: zod.boolean().optional(),
   clientName: zod.string(),
   clientPhone: zod.string().optional(),
   clientEmail: zod.string().optional(),
@@ -669,6 +672,7 @@ export const CreateInvoiceBody = zod.object({
       unitPrice: zod.number(),
       productId: zod.number().optional(),
       productType: zod.enum(["perfumeria", "sublimacion", "combo"]).optional(),
+      costPrice: zod.number().optional(),
     }),
   ),
 });
@@ -705,6 +709,7 @@ export const GetInvoiceResponse = zod.object({
   transportista: zod.string().nullish(),
   fotoGuiaPath: zod.string().nullish(),
   estadoEntrega: zod.string(),
+  isBackToBack: zod.boolean().optional(),
   items: zod
     .array(
       zod.object({
@@ -714,6 +719,7 @@ export const GetInvoiceResponse = zod.object({
         quantity: zod.number(),
         unitPrice: zod.number(),
         total: zod.number(),
+        costPrice: zod.number().optional(),
       }),
     )
     .optional(),
@@ -743,6 +749,7 @@ export const UpdateInvoiceParams = zod.object({
 
 export const UpdateInvoiceBody = zod.object({
   status: zod.enum(["borrador", "pendiente", "pagada", "cancelada"]).optional(),
+  isBackToBack: zod.boolean().optional(),
   clientName: zod.string().optional(),
   clientPhone: zod.string().optional(),
   clientEmail: zod.string().optional(),
@@ -779,6 +786,7 @@ export const UpdateInvoiceBody = zod.object({
         productType: zod
           .enum(["perfumeria", "sublimacion", "combo"])
           .optional(),
+        costPrice: zod.number().optional(),
       }),
     )
     .optional(),
@@ -809,6 +817,7 @@ export const UpdateInvoiceResponse = zod.object({
   transportista: zod.string().nullish(),
   fotoGuiaPath: zod.string().nullish(),
   estadoEntrega: zod.string(),
+  isBackToBack: zod.boolean().optional(),
   items: zod
     .array(
       zod.object({
@@ -818,6 +827,7 @@ export const UpdateInvoiceResponse = zod.object({
         quantity: zod.number(),
         unitPrice: zod.number(),
         total: zod.number(),
+        costPrice: zod.number().optional(),
       }),
     )
     .optional(),
@@ -883,6 +893,7 @@ export const UploadInvoiceGuiaResponse = zod.object({
   transportista: zod.string().nullish(),
   fotoGuiaPath: zod.string().nullish(),
   estadoEntrega: zod.string(),
+  isBackToBack: zod.boolean().optional(),
   items: zod
     .array(
       zod.object({
@@ -892,6 +903,7 @@ export const UploadInvoiceGuiaResponse = zod.object({
         quantity: zod.number(),
         unitPrice: zod.number(),
         total: zod.number(),
+        costPrice: zod.number().optional(),
       }),
     )
     .optional(),
@@ -944,6 +956,7 @@ export const CancelInvoiceResponse = zod.object({
   transportista: zod.string().nullish(),
   fotoGuiaPath: zod.string().nullish(),
   estadoEntrega: zod.string(),
+  isBackToBack: zod.boolean().optional(),
   items: zod
     .array(
       zod.object({
@@ -953,6 +966,7 @@ export const CancelInvoiceResponse = zod.object({
         quantity: zod.number(),
         unitPrice: zod.number(),
         total: zod.number(),
+        costPrice: zod.number().optional(),
       }),
     )
     .optional(),

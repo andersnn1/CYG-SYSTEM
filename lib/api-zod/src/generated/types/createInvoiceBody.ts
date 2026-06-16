@@ -11,6 +11,7 @@ import type { CreateInvoiceItemBody } from "./createInvoiceItemBody";
 
 export interface CreateInvoiceBody {
   clientId?: number;
+  isBackToBack?: boolean;
   clientName: string;
   clientPhone?: string;
   clientEmail?: string;

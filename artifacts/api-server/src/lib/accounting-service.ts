@@ -1,4 +1,4 @@
-import { db, accountsTable, journalEntriesTable, journalLinesTable, accountingMappingsTable, accountingPeriodsTable } from "@workspace/db";
+import { db, accountsTable, journalEntriesTable, journalLinesTable, accountingMappingsTable, accountingPeriodsTable, perfumeryTable, sublimationTable, customInventoryTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 
 export async function isPeriodLocked(dateStr: string): Promise<boolean> {
@@ -47,8 +47,11 @@ export async function seedAccountingData() {
       { code: "1021", name: "Banco Cuenta Personal/Dueño", type: "Asset" as const, parentCode: "11", subType: "Current Asset", isSystemAccount: true },
       { code: "1022", name: "Banco Fondo Utilidad", type: "Asset" as const, parentCode: "11", subType: "Current Asset", isSystemAccount: true },
       { code: "1110", name: "Cuentas por Cobrar Clientes", type: "Asset" as const, parentCode: "11", subType: "Current Asset", isSystemAccount: true },
+      { code: "1120", name: "Inventario de Productos", type: "Asset" as const, parentCode: "11", subType: "Current Asset", isSystemAccount: true },
       { code: "2010", name: "IVA por Pagar / Débito Fiscal", type: "Liability" as const, parentCode: "21", subType: "Current Liability", isSystemAccount: true },
+      { code: "2020", name: "Distribución a Socio", type: "Liability" as const, parentCode: "21", subType: "Current Liability", isSystemAccount: true },
       { code: "3010", name: "Capital Social", type: "Equity" as const, parentCode: "31", subType: "Equity", isSystemAccount: true },
+      { code: "3020", name: "Utilidad del Ejercicio Acumulada", type: "Equity" as const, parentCode: "31", subType: "Equity", isSystemAccount: true },
       { code: "4010", name: "Ingresos por Ventas", type: "Revenue" as const, parentCode: "41", subType: "Revenue", isSystemAccount: true },
       { code: "5010", name: "Gastos de Operación", type: "Expense" as const, parentCode: "51", subType: "Expense", isSystemAccount: true },
       { code: "5015", name: "Gastos de Envío", type: "Expense" as const, parentCode: "51", subType: "Expense", isSystemAccount: true },
@@ -101,16 +104,33 @@ export async function seedAccountingData() {
 
     // 2. Seed mappings
     const defaultMappings = [
-      // invoice_created: Debit 1110 (total), Credit 4010 (subtotal), Credit 2010 (tax)
+      // invoice_created: Debit 1110 (total), Credit 4010 (subtotal)
       { event: "invoice_created", accountCode: "1110", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "total" },
       { event: "invoice_created", accountCode: "4010", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "subtotal" },
-      { event: "invoice_created", accountCode: "2010", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "tax" },
       
       // invoice_paid: Debit 1020 (50%), Debit 1021 (40%), Debit 1022 (10%), Credit 1110 (total)
       { event: "invoice_paid", accountCode: "1020", direction: "DEBIT" as const, valueType: "percentage" as const, valueExpression: "50" },
       { event: "invoice_paid", accountCode: "1021", direction: "DEBIT" as const, valueType: "percentage" as const, valueExpression: "40" },
       { event: "invoice_paid", accountCode: "1022", direction: "DEBIT" as const, valueType: "percentage" as const, valueExpression: "10" },
       { event: "invoice_paid", accountCode: "1110", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "total" },
+
+      // invoice_paid_apartado: compound split for apartados and invoices with baseCost
+      { event: "invoice_paid_apartado", accountCode: "1020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "bancoOpex" },
+      { event: "invoice_paid_apartado", accountCode: "1021", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "bancoSueldoDueno" },
+      { event: "invoice_paid_apartado", accountCode: "1022", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "bancoUtilidad" },
+      { event: "invoice_paid_apartado", accountCode: "2020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "partnerPayout" },
+      { event: "invoice_paid_apartado", accountCode: "1110", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "total" },
+      { event: "invoice_paid_apartado", accountCode: "5020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "baseCost" },
+      { event: "invoice_paid_apartado", accountCode: "1120", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "baseCost" },
+
+      // invoice_direct_sale: compound split for direct sales (no Accounts Receivable)
+      { event: "invoice_direct_sale", accountCode: "1020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "bancoOpex" },
+      { event: "invoice_direct_sale", accountCode: "1021", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "bancoSueldoDueno" },
+      { event: "invoice_direct_sale", accountCode: "1022", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "bancoUtilidad" },
+      { event: "invoice_direct_sale", accountCode: "2020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "partnerPayout" },
+      { event: "invoice_direct_sale", accountCode: "5020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "baseCost" },
+      { event: "invoice_direct_sale", accountCode: "4010", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "subtotal" },
+      { event: "invoice_direct_sale", accountCode: "1120", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "baseCost" },
 
       // invoice_paid_back_to_back: compound split for back-to-back invoices
       { event: "invoice_paid_back_to_back", accountCode: "1020", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "ownerPayoutOperativa" },
@@ -125,6 +145,14 @@ export async function seedAccountingData() {
       { event: "expense_created", accountCode: "5010", direction: "DEBIT" as const, valueType: "variable" as const, valueExpression: "amount" },
       { event: "expense_created", accountCode: "1010", direction: "CREDIT" as const, valueType: "variable" as const, valueExpression: "amount" },
     ] as const;
+
+    // Eliminar mapeo obsoleto de la cuenta 2010 (ISV) para invoice_created
+    await db.delete(accountingMappingsTable).where(
+      and(
+        eq(accountingMappingsTable.event, "invoice_created"),
+        eq(accountingMappingsTable.accountCode, "2010")
+      )
+    );
 
     for (const map of defaultMappings) {
       const [exists] = await db
@@ -306,4 +334,285 @@ export async function injectJournalEntry(
   );
 
   return entry;
+}
+
+export async function handleMonthEndClosing(year: number, month: number) {
+  const startDateStr = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDateStr = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  // 1. Obtener nominales y sus saldos
+  const nominals = await db
+    .select({
+      id: accountsTable.id,
+      code: accountsTable.code,
+      name: accountsTable.name,
+      type: accountsTable.type,
+      debit: sql<string>`coalesce(sum(${journalLinesTable.debit}), 0)`,
+      credit: sql<string>`coalesce(sum(${journalLinesTable.credit}), 0)`,
+    })
+    .from(accountsTable)
+    .innerJoin(journalLinesTable, eq(accountsTable.id, journalLinesTable.accountId))
+    .innerJoin(journalEntriesTable, eq(journalLinesTable.journalEntryId, journalEntriesTable.id))
+    .where(
+      and(
+        sql`${journalEntriesTable.date} >= ${startDateStr}`,
+        sql`${journalEntriesTable.date} <= ${endDateStr}`,
+        sql`${journalEntriesTable.referenceSource} not like 'Closing_Entry%'`,
+        sql`${accountsTable.type} in ('Revenue', 'Expense')`
+      )
+    )
+    .groupBy(accountsTable.id, accountsTable.code, accountsTable.name, accountsTable.type);
+
+  let totalRevenue = 0;
+  let totalExpense = 0;
+  const resolvedLines: { accountId: string; debit: number; credit: number }[] = [];
+
+  for (const n of nominals) {
+    const deb = parseFloat(n.debit);
+    const cred = parseFloat(n.credit);
+
+    if (n.type === "Revenue") {
+      const balance = cred - deb;
+      if (balance !== 0) {
+        totalRevenue += balance;
+        resolvedLines.push({
+          accountId: n.id,
+          debit: Number(balance.toFixed(2)),
+          credit: 0,
+        });
+      }
+    } else if (n.type === "Expense") {
+      const balance = deb - cred;
+      if (balance !== 0) {
+        totalExpense += balance;
+        resolvedLines.push({
+          accountId: n.id,
+          debit: 0,
+          credit: Number(balance.toFixed(2)),
+        });
+      }
+    }
+  }
+
+  if (resolvedLines.length === 0) {
+    console.log(`No hay saldos nominales para cerrar en el periodo ${year}-${month}.`);
+    return null;
+  }
+
+  const netIncome = totalRevenue - totalExpense;
+
+  // 2. Obtener o sembrar cuenta de Utilidad del Ejercicio Acumulada
+  let [equityAccount] = await db
+    .select()
+    .from(accountsTable)
+    .where(eq(accountsTable.code, "3020"));
+
+  if (!equityAccount) {
+    const [inserted] = await db.insert(accountsTable).values({
+      code: "3020",
+      name: "Utilidad del Ejercicio Acumulada",
+      type: "Equity",
+      isGroup: false,
+      subType: "Equity",
+      isSystemAccount: true,
+    }).returning();
+    equityAccount = inserted;
+  }
+
+  if (netIncome !== 0) {
+    resolvedLines.push({
+      accountId: equityAccount.id,
+      debit: netIncome < 0 ? Number(Math.abs(netIncome).toFixed(2)) : 0,
+      credit: netIncome > 0 ? Number(netIncome.toFixed(2)) : 0,
+    });
+  }
+
+  const referenceSource = `Closing_Entry_${year}_${String(month).padStart(2, "0")}`;
+
+  // Idempotencia: borrar si ya existe un asiento de cierre para este periodo
+  const existing = await db
+    .select({ id: journalEntriesTable.id })
+    .from(journalEntriesTable)
+    .where(eq(journalEntriesTable.referenceSource, referenceSource));
+
+  for (const ent of existing) {
+    await db.delete(journalEntriesTable).where(eq(journalEntriesTable.id, ent.id));
+  }
+
+  // Insertar asiento
+  const [entry] = await db
+    .insert(journalEntriesTable)
+    .values({
+      date: endDateStr,
+      referenceSource,
+      narration: `Asiento de Cierre Mensual Automático - Periodo ${year}-${String(month).padStart(2, "0")}`,
+    })
+    .returning();
+
+  // Insertar líneas de diario
+  await db.insert(journalLinesTable).values(
+    resolvedLines.map(l => ({
+      journalEntryId: entry.id,
+      accountId: l.accountId,
+      debit: l.debit.toFixed(2),
+      credit: l.credit.toFixed(2),
+      businessLine: "general" as const,
+    }))
+  );
+
+  // Bloquear periodo
+  const [existingPeriod] = await db
+    .select()
+    .from(accountingPeriodsTable)
+    .where(
+      and(
+        eq(accountingPeriodsTable.year, year),
+        eq(accountingPeriodsTable.month, month)
+      )
+    );
+
+  if (existingPeriod) {
+    await db
+      .update(accountingPeriodsTable)
+      .set({
+        isClosed: true,
+        closedAt: new Date(),
+        closedBy: "Sistema (Cron Cierre Automático)",
+      })
+      .where(eq(accountingPeriodsTable.id, existingPeriod.id));
+  } else {
+    await db
+      .insert(accountingPeriodsTable)
+      .values({
+        year,
+        month,
+        isClosed: true,
+        closedAt: new Date(),
+        closedBy: "Sistema (Cron Cierre Automático)",
+      });
+  }
+
+  return entry;
+}
+
+export async function registrarCompraInventario(
+  productType: "perfumeria" | "sublimacion" | "custom-inventory",
+  productId: number,
+  cantidad: number,
+  costoUnitarioCompra: number,
+  dateStr?: string
+) {
+  const purchaseDate = dateStr || new Date().toISOString().split("T")[0];
+
+  if (await isPeriodLocked(purchaseDate)) {
+    throw new Error(`El período para la fecha ${purchaseDate} está cerrado. No se permiten compras.`);
+  }
+
+  const montoTotal = cantidad * costoUnitarioCompra;
+
+  return await db.transaction(async (tx) => {
+    // 1. Obtener producto y calcular Costo Promedio Ponderado
+    let productName = "";
+    let currentStock = 0;
+    let currentCost = 0;
+
+    if (productType === "perfumeria") {
+      const [product] = await tx.select().from(perfumeryTable).where(eq(perfumeryTable.id, productId));
+      if (!product) throw new Error(`Producto de perfumería con ID ${productId} no encontrado.`);
+      productName = product.name;
+      currentStock = product.stock ?? 0;
+      currentCost = Number(product.costPrice ?? 0);
+    } else if (productType === "sublimacion") {
+      const [product] = await tx.select().from(sublimationTable).where(eq(sublimationTable.id, productId));
+      if (!product) throw new Error(`Producto de sublimación con ID ${productId} no encontrado.`);
+      productName = product.name;
+      currentStock = product.stock ?? 0;
+      currentCost = Number(product.costPrice ?? 0);
+    } else if (productType === "custom-inventory") {
+      const [product] = await tx.select().from(customInventoryTable).where(eq(customInventoryTable.id, productId));
+      if (!product) throw new Error(`Producto de inventario personalizado con ID ${productId} no encontrado.`);
+      productName = product.name;
+      currentStock = product.stock ?? 0;
+      currentCost = Number(product.costPrice ?? 0);
+    } else {
+      throw new Error(`Tipo de producto ${productType} no soportado para compras.`);
+    }
+
+    // Salvaguarda: si stock actual es negativo o cero, no ponderamos negativamente
+    const stockActual = Math.max(0, currentStock);
+    const totalNuevo = stockActual + cantidad;
+    const nuevoCostoPromedio = totalNuevo > 0
+      ? ((stockActual * currentCost) + (cantidad * costoUnitarioCompra)) / totalNuevo
+      : costoUnitarioCompra;
+
+    const nuevoCostoStr = nuevoCostoPromedio.toFixed(2);
+    const nuevoStock = currentStock + cantidad;
+
+    // 2. Actualizar stock y costo en la tabla correspondiente
+    if (productType === "perfumeria") {
+      await tx.update(perfumeryTable)
+        .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
+        .where(eq(perfumeryTable.id, productId));
+    } else if (productType === "sublimacion") {
+      await tx.update(sublimationTable)
+        .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
+        .where(eq(sublimationTable.id, productId));
+    } else if (productType === "custom-inventory") {
+      await tx.update(customInventoryTable)
+        .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
+        .where(eq(customInventoryTable.id, productId));
+    }
+
+    // 3. Obtener cuentas contables
+    const [inventarioAccount] = await tx.select().from(accountsTable).where(eq(accountsTable.code, "1120"));
+    const [bancoOpexAccount] = await tx.select().from(accountsTable).where(eq(accountsTable.code, "1020"));
+
+    if (!inventarioAccount || !bancoOpexAccount) {
+      throw new Error("Cuentas contables indispensables (1120 o 1020) no encontradas en el catálogo.");
+    }
+
+    // 4. Crear Asiento de Diario
+    const referenceSource = `Purchase_${productType}_${productId}_${Date.now()}`;
+    const [entry] = await tx
+      .insert(journalEntriesTable)
+      .values({
+        date: purchaseDate,
+        referenceSource,
+        narration: `Compra al contado - ${cantidad} uds de ${productName} (Costo Unitario: L. ${costoUnitarioCompra.toFixed(2)})`,
+      })
+      .returning();
+
+    // Determinar la línea de negocio (businessLine)
+    const businessLine = productType === "perfumeria" 
+      ? ("perfumeria" as const) 
+      : productType === "sublimacion" 
+        ? ("sublimacion" as const) 
+        : ("general" as const);
+
+    // 5. Insertar líneas de diario (Partida Contable: Debe 1120, Haber 1020)
+    await tx.insert(journalLinesTable).values([
+      {
+        journalEntryId: entry.id,
+        accountId: inventarioAccount.id,
+        debit: montoTotal.toFixed(2),
+        credit: "0.00",
+        businessLine,
+      },
+      {
+        journalEntryId: entry.id,
+        accountId: bancoOpexAccount.id,
+        debit: "0.00",
+        credit: montoTotal.toFixed(2),
+        businessLine,
+      }
+    ]);
+
+    return {
+      journalEntry: entry,
+      nuevoStock,
+      nuevoCosto: nuevoCostoPromedio,
+      montoTotal,
+    };
+  });
 }

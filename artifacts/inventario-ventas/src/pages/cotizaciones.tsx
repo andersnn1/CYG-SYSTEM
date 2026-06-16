@@ -1415,7 +1415,7 @@ export default function Cotizaciones() {
 
   const renderProductCatalogModal = () => (
     <Dialog open={productModalOpen} onOpenChange={setProductModalOpen}>
-      <DialogContent className="w-full h-[100dvh] sm:h-auto max-w-full sm:max-w-4xl p-0 overflow-hidden border-none sm:border sm:border-white/10 shadow-2xl bg-slate-950 text-slate-100 flex flex-col animate-in fade-in duration-200 sm:!zoom-in-100 sm:!slide-in-from-top-[50%] sm:!slide-in-from-left-[50%]">
+      <DialogContent className="w-full h-[100dvh] sm:h-[80vh] max-w-full sm:max-w-5xl lg:max-w-6xl sm:max-h-[85vh] p-0 overflow-hidden border-none sm:border sm:border-white/10 shadow-2xl bg-slate-950 text-slate-100 flex flex-col animate-in fade-in duration-200 sm:!zoom-in-100 sm:!slide-in-from-top-[50%] sm:!slide-in-from-left-[50%]">
         <div className="p-4 sm:p-6 border-b border-white/5 bg-slate-900/50 shrink-0">
           <div className="flex justify-between items-center mb-5">
             <div className="flex items-center gap-3">
@@ -1465,7 +1465,7 @@ export default function Cotizaciones() {
               })}
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {products
               .filter(p => {
                 // Categoría filter
@@ -2254,7 +2254,7 @@ export default function Cotizaciones() {
                 <Label className="text-[10px] text-red-600/70 font-black uppercase tracking-widest">Descuento</Label>
                 <Input
                   type="number" min={0} step="0.01"
-                  className="h-6 border-transparent hover:border-blue-200 focus:border-blue-400 bg-transparent text-right w-28 px-1 shadow-none text-sm text-red-600 font-black"
+                  className="h-6 py-0 px-2 border-transparent hover:border-blue-200 focus:border-blue-400 bg-transparent text-right w-28 shadow-none text-sm text-red-600 font-black"
                   value={form.discount || ""}
                   onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))}
                 />
@@ -2263,7 +2263,7 @@ export default function Cotizaciones() {
                 <Label className="text-[10px] text-blue-600/70 font-black uppercase tracking-widest">Impuesto (ISV)</Label>
                 <Input
                   type="number" min={0} step="0.01"
-                  className="h-6 border-transparent hover:border-blue-200 focus:border-blue-400 bg-transparent text-right w-28 px-1 shadow-none text-sm font-black text-blue-800"
+                  className="h-6 py-0 px-2 border-transparent hover:border-blue-200 focus:border-blue-400 bg-transparent text-right w-28 shadow-none text-sm font-black text-blue-800"
                   value={form.tax || ""}
                   onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))}
                 />

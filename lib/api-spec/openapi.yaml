@@ -1384,6 +1384,8 @@ components:
           type: ["string", "null"]
         estadoEntrega:
           type: string
+        isBackToBack:
+          type: boolean
         items:
           type: array
           items:
@@ -1427,6 +1429,8 @@ components:
           type: number
         total:
           type: number
+        costPrice:
+          type: number
       required:
         - id
         - invoiceId
@@ -1465,6 +1469,8 @@ components:
       properties:
         clientId:
           type: integer
+        isBackToBack:
+          type: boolean
         clientName:
           type: string
         clientPhone:
@@ -1540,6 +1546,8 @@ components:
         productType:
           type: string
           enum: [perfumeria, sublimacion, combo]
+        costPrice:
+          type: number
       required:
         - description
         - quantity
@@ -1551,6 +1559,8 @@ components:
         status:
           type: string
           enum: [borrador, pendiente, pagada, cancelada]
+        isBackToBack:
+          type: boolean
         clientName:
           type: string
         clientPhone:

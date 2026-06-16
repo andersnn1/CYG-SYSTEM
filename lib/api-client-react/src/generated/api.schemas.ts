@@ -339,6 +339,7 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  costPrice?: number;
 }
 
 export interface InvoicePayment {
@@ -391,6 +392,7 @@ export interface Invoice {
   /** @nullable */
   fotoGuiaPath?: string | null;
   estadoEntrega: string;
+  isBackToBack?: boolean;
   items?: InvoiceItem[];
   payments?: InvoicePayment[];
   createdAt: string;
@@ -432,10 +434,12 @@ export interface CreateInvoiceItemBody {
   unitPrice: number;
   productId?: number;
   productType?: CreateInvoiceItemBodyProductType;
+  costPrice?: number;
 }
 
 export interface CreateInvoiceBody {
   clientId?: number;
+  isBackToBack?: boolean;
   clientName: string;
   clientPhone?: string;
   clientEmail?: string;
@@ -486,6 +490,7 @@ export const UpdateInvoiceBodyPaymentMethod = {
 
 export interface UpdateInvoiceBody {
   status?: UpdateInvoiceBodyStatus;
+  isBackToBack?: boolean;
   clientName?: string;
   clientPhone?: string;
   clientEmail?: string;

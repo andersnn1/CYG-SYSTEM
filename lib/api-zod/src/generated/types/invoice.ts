@@ -48,6 +48,7 @@ export interface Invoice {
   /** @nullable */
   fotoGuiaPath?: string | null;
   estadoEntrega: string;
+  isBackToBack?: boolean;
   items?: InvoiceItem[];
   payments?: InvoicePayment[];
   createdAt: Date;

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, date, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -27,6 +27,7 @@ export const invoicesTable = pgTable("invoices", {
   transportista: text("transportista"),
   fotoGuiaPath: text("foto_guia_path"),
   estadoEntrega: text("estado_entrega").notNull().default("Pendiente"),
+  isBackToBack: boolean("is_back_to_back").notNull().default(false),
   // ── Cálculo de Utilidad Real (Panel Interno) ─────────────────────────────
   baseCost: numeric("base_cost", { precision: 10, scale: 2 }),
   internalExpenses: numeric("internal_expenses", { precision: 10, scale: 2 }).default("0"),
@@ -47,6 +48,7 @@ export const invoiceItemsTable = pgTable("invoice_items", {
   total: numeric("total", { precision: 10, scale: 2 }).notNull(),
   productId: integer("product_id"),
   productType: text("product_type"), // "perfumeria" | "sublimacion"
+  costPrice: numeric("cost_price", { precision: 10, scale: 2 }),
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true });

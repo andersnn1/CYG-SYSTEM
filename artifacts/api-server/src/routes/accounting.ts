@@ -9,7 +9,7 @@ import {
   accountingPeriodsTable 
 } from "@workspace/db";
 import { z } from "zod";
-import { isPeriodLocked, injectJournalEntry } from "../lib/accounting-service";
+import { isPeriodLocked, injectJournalEntry, handleMonthEndClosing, registrarCompraInventario } from "../lib/accounting-service";
 
 const router: IRouter = Router();
 
@@ -420,8 +420,8 @@ router.get("/accounting/reports/income-statement", async (req, res): Promise<voi
         type: accountsTable.type,
         parentId: accountsTable.parentId,
         isGroup: accountsTable.isGroup,
-        debit: sql<string>`coalesce(sum(case when ${journalEntriesTable.date} >= ${startDate} and ${journalEntriesTable.date} <= ${endDate} then ${journalLinesTable.debit} else 0 end), 0)`,
-        credit: sql<string>`coalesce(sum(case when ${journalEntriesTable.date} >= ${startDate} and ${journalEntriesTable.date} <= ${endDate} then ${journalLinesTable.credit} else 0 end), 0)`,
+        debit: sql<string>`coalesce(sum(case when ${journalEntriesTable.date} >= ${startDate} and ${journalEntriesTable.date} <= ${endDate} and ${journalEntriesTable.referenceSource} not like 'Closing_Entry%' then ${journalLinesTable.debit} else 0 end), 0)`,
+        credit: sql<string>`coalesce(sum(case when ${journalEntriesTable.date} >= ${startDate} and ${journalEntriesTable.date} <= ${endDate} and ${journalEntriesTable.referenceSource} not like 'Closing_Entry%' then ${journalLinesTable.credit} else 0 end), 0)`,
       })
       .from(accountsTable)
       .leftJoin(journalLinesTable, eq(accountsTable.id, journalLinesTable.accountId))
@@ -693,6 +693,79 @@ router.delete("/accounting/mappings/:id", async (req, res): Promise<void> => {
     res.sendStatus(204);
   } catch (err: any) {
     res.status(500).json({ error: "Error al eliminar mapeo: " + err.message });
+  }
+});
+
+// POST /accounting/cron-close
+router.post("/accounting/cron-close", async (req, res): Promise<void> => {
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth(); // 0-11. 0 es enero
+
+  if (req.body.year !== undefined && req.body.month !== undefined) {
+    const y = Number(req.body.year);
+    const m = Number(req.body.month);
+    if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+      year = y;
+      month = m;
+    } else {
+      res.status(400).json({ error: "Parámetros year o month inválidos." });
+      return;
+    }
+  } else {
+    if (month === 0) {
+      month = 12;
+      year = year - 1;
+    }
+  }
+
+  try {
+    const entry = await handleMonthEndClosing(year, month);
+    if (entry) {
+      res.json({ message: `Cierre mensual completado para el periodo ${year}-${month}`, journalEntry: entry });
+    } else {
+      res.json({ message: `No se requirieron acciones de cierre para el periodo ${year}-${month}.` });
+    }
+  } catch (err: any) {
+    console.error("Error en cron-close:", err);
+    res.status(500).json({ error: "Error al procesar el cierre contable mensual: " + err.message });
+  }
+});
+
+const RegisterPurchaseBody = z.object({
+  productType: z.enum(["perfumeria", "sublimacion", "custom-inventory"]),
+  productId: z.number().int().positive(),
+  quantity: z.number().int().positive(),
+  unitCost: z.number().positive(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// POST /accounting/inventory-purchase
+router.post("/accounting/inventory-purchase", async (req, res): Promise<void> => {
+  const parsed = RegisterPurchaseBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { productType, productId, quantity, unitCost, date } = parsed.data;
+
+  try {
+    const result = await registrarCompraInventario(
+      productType,
+      productId,
+      quantity,
+      unitCost,
+      date
+    );
+
+    res.status(201).json({
+      message: "Compra de inventario al contado registrada exitosamente.",
+      ...result
+    });
+  } catch (err: any) {
+    console.error("Error en POST /accounting/inventory-purchase:", err);
+    res.status(500).json({ error: "Error al registrar la compra de inventario: " + err.message });
   }
 });
 

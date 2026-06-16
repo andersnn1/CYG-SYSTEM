@@ -11,6 +11,7 @@ import type { UpdateInvoiceBodyStatus } from "./updateInvoiceBodyStatus";
 
 export interface UpdateInvoiceBody {
   status?: UpdateInvoiceBodyStatus;
+  isBackToBack?: boolean;
   clientName?: string;
   clientPhone?: string;
   clientEmail?: string;

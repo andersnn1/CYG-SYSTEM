@@ -4,6 +4,7 @@ import type { Client } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -34,6 +35,7 @@ interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  costPrice?: number;
 }
 
 interface Invoice {
@@ -61,6 +63,7 @@ interface Invoice {
   transportista?: string | null;
   fotoGuiaPath?: string | null;
   estadoEntrega?: string;
+  isBackToBack?: boolean;
   // Profit fields
   baseCost?: number;
   internalExpenses?: number;
@@ -983,6 +986,7 @@ type InvoiceForm = {
   transportista: string;
   estadoEntrega: string;
   items: ItemForm[];
+  isBackToBack: boolean;
 };
 
 const today = new Date().toISOString().split("T")[0];
@@ -994,6 +998,7 @@ const defaultForm = (): InvoiceForm => ({
   issueDate: today, dueDate: "",
   paymentMethod: "efectivo", transferReference: "", numeroGuia: "", transportista: "", estadoEntrega: "Pendiente",
   items: [{ description: "", quantity: 1, unitPrice: 0, code: "" }],
+  isBackToBack: false,
 });
 
 function FacturaMobileCard({
@@ -1320,7 +1325,10 @@ export default function Facturas() {
             description: it.description,
             quantity: it.quantity,
             unitPrice: it.unitPrice,
+            code: it.code || "",
+            costPrice: it.costPrice,
           })) ?? [],
+          isBackToBack: draft.isBackToBack ?? false,
         });
         setEditingId(null);
         setView("form");
@@ -1361,7 +1369,9 @@ export default function Facturas() {
               quantity: it.quantity,
               unitPrice: it.unitPrice,
               code: "",
+              costPrice: it.costPrice,
             })) ?? [],
+            isBackToBack: full.isBackToBack ?? false,
           });
           setInternalExpenses(full.internalExpenses ?? 0);
           setProfitTaxes(full.taxes ?? 0);
@@ -2021,6 +2031,16 @@ export default function Facturas() {
                     <Input type="date" className="h-9 font-bold text-xs" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
                   </div>
                 </div>
+                <div className="flex items-center space-x-2 pt-2 border-t border-border/60 mt-2">
+                  <Checkbox
+                    id="isBackToBack-mobile"
+                    checked={form.isBackToBack}
+                    onCheckedChange={(checked) => setForm(f => ({ ...f, isBackToBack: !!checked }))}
+                  />
+                  <Label htmlFor="isBackToBack-mobile" className="text-[9px] font-black uppercase tracking-wider text-slate-500 cursor-pointer">
+                    Compra Back-to-Back (Entrada Automática)
+                  </Label>
+                </div>
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div className="space-y-1">
                     <Label className="text-[9px] font-black uppercase text-slate-500">Descuento</Label>
@@ -2198,30 +2218,38 @@ export default function Facturas() {
   } else {
     mainContent = (
       <div className="flex flex-col h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] overflow-hidden bg-background animate-in fade-in duration-200 border rounded-lg shadow-2xl m-2">
-      <header className="h-14 border-b bg-muted/40 flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-6">
-          <Button variant="ghost" size="sm" className="h-9 gap-1.5 font-bold uppercase tracking-widest text-muted-foreground" onClick={() => { setView("list"); setEditingId(null); setForm(defaultForm()); }}>
-            <ArrowLeft className="h-4 w-4" /> Salir [ESC]
+      <header className="h-14 border-b bg-muted/40 flex items-center justify-between gap-3 px-3 lg:px-6 shrink-0">
+        <div className="flex items-center gap-2 lg:gap-6 min-w-0">
+          <Button variant="ghost" size="sm" className="h-9 gap-1.5 font-bold uppercase tracking-widest text-muted-foreground shrink-0" onClick={() => { setView("list"); setEditingId(null); setForm(defaultForm()); }}>
+            <ArrowLeft className="h-4 w-4" /> <span className="hidden lg:inline">Salir [ESC]</span><span className="lg:hidden">ESC</span>
           </Button>
-          <div className="h-6 w-px bg-border mx-2"></div>
-          <div className="flex flex-col">
-            <h1 className="font-black text-sm tracking-tight uppercase leading-tight">{editingId ? (editingInvoice?.invoiceNumber ?? "Factura") : "Terminal POS"}</h1>
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">C&G Electronics</span>
+          <div className="hidden lg:block h-6 w-px bg-border shrink-0"></div>
+          <div className="hidden xl:flex flex-col min-w-0">
+            <h1 className="font-black text-sm tracking-tight uppercase leading-tight whitespace-nowrap truncate">{editingId ? (editingInvoice?.invoiceNumber ?? "Factura") : "Terminal POS"}</h1>
+            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] whitespace-nowrap">C&G Electronics</span>
           </div>
           {editingId && editingInvoice && <StatusBadge status={editingInvoice.status} />}
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider border-blue-200/50 text-blue-600 hover:bg-blue-50" onClick={() => setProductModalOpen(true)}><Package className="h-4 w-4" /> Productos [F3]</Button>
-          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider" onClick={() => setNotesModalOpen(true)}><FileText className="h-4 w-4" /> Notas [F6]</Button>
-          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider" onClick={handleOpenClientModal}><UserPlus className="h-4 w-4" /> Cliente [F7]</Button>
-          <Button className="h-9 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase tracking-wider px-6 shadow-lg" onClick={() => setCheckoutOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar [F4]</Button>
+        <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider border-blue-200/50 text-blue-600 hover:bg-blue-50 whitespace-nowrap" onClick={() => setProductModalOpen(true)}>
+            <Package className="h-4 w-4" /> <span className="hidden xl:inline">Productos </span>[F3]
+          </Button>
+          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider whitespace-nowrap" onClick={() => setNotesModalOpen(true)}>
+            <FileText className="h-4 w-4" /> <span className="hidden xl:inline">Notas </span>[F6]
+          </Button>
+          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider whitespace-nowrap" onClick={handleOpenClientModal}>
+            <UserPlus className="h-4 w-4" /> <span className="hidden xl:inline">Cliente </span>[F7]
+          </Button>
+          <Button className="h-9 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase tracking-wider px-3 lg:px-6 shadow-lg whitespace-nowrap" onClick={() => setCheckoutOpen(true)}>
+            <Coins className="h-4 w-4 mr-2" /> <span className="hidden xl:inline">Cobrar </span>[F4]
+          </Button>
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
-        <section className="flex-[7] flex flex-col border-r overflow-hidden bg-card/50">
+        <section className="flex-1 min-w-0 flex flex-col border-r overflow-hidden bg-card/50">
           <div className="flex-1 overflow-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full min-w-[640px] border-collapse">
               <thead className="sticky top-0 bg-muted z-20 border-b">
                 <tr>
                   <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground w-12">#</th>
@@ -2240,7 +2268,7 @@ export default function Facturas() {
                     <td className="px-2 py-2">
                       <Input
                         id={`product-code-input-${i}`}
-                        className={`h-9 font-mono text-xs font-bold ${codeError[i] ? "border-red-500 bg-red-50" : "bg-transparent border-transparent focus:border-blue-500"}`}
+                        className={`h-9 px-2 py-1 font-mono text-xs font-bold ${codeError[i] ? "border-red-500 bg-red-50" : "bg-transparent border-transparent focus:border-blue-500"}`}
                         placeholder="Cód..."
                         value={it.code}
                         onChange={e => updateItem(i, "code", e.target.value)}
@@ -2248,13 +2276,13 @@ export default function Facturas() {
                       />
                     </td>
                     <td className="px-2 py-2">
-                       <Input className="h-9 text-xs font-semibold bg-transparent border-transparent focus:border-blue-500" placeholder="Producto..." value={it.description} onChange={e => updateItem(i, "description", e.target.value)} />
+                       <Input className="h-9 px-2 py-1 text-xs font-semibold bg-transparent border-transparent focus:border-blue-500" placeholder="Producto..." value={it.description} onChange={e => updateItem(i, "description", e.target.value)} />
                     </td>
                     <td className="px-2 py-2">
-                       <Input type="number" className="h-9 text-center font-mono font-bold text-xs bg-transparent border-transparent focus:border-blue-500" value={it.quantity} onChange={e => updateItem(i, "quantity", Number(e.target.value))} />
+                       <Input type="number" className="h-9 px-1 py-1 text-center font-mono font-bold text-xs bg-transparent border-transparent focus:border-blue-500" value={it.quantity} onChange={e => updateItem(i, "quantity", Number(e.target.value))} />
                     </td>
                     <td className="px-2 py-2">
-                       <Input type="number" className="h-9 text-right font-mono font-bold text-xs bg-transparent border-transparent focus:border-blue-500" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", Number(e.target.value))} />
+                       <Input type="number" className="h-9 px-2 py-1 text-right font-mono font-bold text-xs bg-transparent border-transparent focus:border-blue-500" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", Number(e.target.value))} />
                     </td>
                     <td className="px-2 py-2 text-right font-black font-mono text-xs">{formatCurrency(it.quantity * it.unitPrice)}</td>
                     <td className="px-4 py-2">
@@ -2270,12 +2298,12 @@ export default function Facturas() {
           </div>
         </section>
 
-        <aside className="flex-[3] flex flex-col bg-muted/20 overflow-hidden min-w-[340px] max-w-[400px]">
+        <aside className="w-[380px] shrink-0 flex flex-col bg-muted/20 overflow-hidden">
           <section className="p-6 bg-card border-b shadow-sm shrink-0">
             <div className="space-y-3">
               <div className="flex justify-between items-baseline"><span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Subtotal</span><span className="text-lg font-bold font-mono">{formatCurrency(subtotal)}</span></div>
-              <div className="flex justify-between items-center text-red-600"><span className="text-[9px] font-black uppercase tracking-widest">Descuento</span><Input type="number" className="w-20 h-7 text-right font-mono font-bold text-xs" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))} /></div>
-              <div className="flex justify-between items-center"><span className="text-[9px] font-black uppercase tracking-widest">ISV (15%)</span><Input type="number" className="w-20 h-7 text-right font-mono font-bold text-xs" value={form.tax} onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))} /></div>
+              <div className="flex justify-between items-center text-red-600"><span className="text-[9px] font-black uppercase tracking-widest">Descuento</span><Input type="number" className="w-20 h-7 py-0 px-2 text-right font-mono font-bold text-xs" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: Number(e.target.value) }))} /></div>
+              <div className="flex justify-between items-center"><span className="text-[9px] font-black uppercase tracking-widest">ISV (15%)</span><Input type="number" className="w-20 h-7 py-0 px-2 text-right font-mono font-bold text-xs" value={form.tax} onChange={e => setForm(f => ({ ...f, tax: Number(e.target.value) }))} /></div>
               <div className="pt-4 border-t border-slate-200">
                 <div className="bg-slate-950 text-white p-4 rounded-xl shadow-xl flex flex-col items-end">
                    <span className="text-[8px] font-black uppercase tracking-[0.3em] self-start opacity-50 mb-1">Total Factura</span>
@@ -2303,8 +2331,18 @@ export default function Facturas() {
                     <span className="text-[9px] font-bold text-slate-500 block uppercase tracking-wider mt-0.5">{form.clientRtn || "SIN RTN REGISTRADO"}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Emisión</Label><Input type="date" className="h-8 font-mono font-bold text-xs bg-background/50" value={form.issueDate} onChange={e => setForm(f => ({ ...f, issueDate: e.target.value }))} /></div>
-                    <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Vencimiento</Label><Input type="date" className="h-8 font-mono font-bold text-xs bg-background/50" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} /></div>
+                    <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Emisión</Label><Input type="date" className="h-8 py-0 px-2 font-mono font-bold text-xs bg-background/50" value={form.issueDate} onChange={e => setForm(f => ({ ...f, issueDate: e.target.value }))} /></div>
+                    <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Vencimiento</Label><Input type="date" className="h-8 py-0 px-2 font-mono font-bold text-xs bg-background/50" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} /></div>
+                  </div>
+                  <div className="flex items-center space-x-2 pt-2 border-t border-border/60">
+                    <Checkbox
+                      id="isBackToBack"
+                      checked={form.isBackToBack}
+                      onCheckedChange={(checked) => setForm(f => ({ ...f, isBackToBack: !!checked }))}
+                    />
+                    <Label htmlFor="isBackToBack" className="text-[9px] font-black uppercase tracking-wider text-slate-500 cursor-pointer">
+                      Compra Back-to-Back (Entrada Automática)
+                    </Label>
                   </div>
                 </TabsContent>
                 <TabsContent value="delivery" className="m-0 space-y-4">
@@ -2357,7 +2395,7 @@ export default function Facturas() {
 
       {/* Modals Inline to prevent re-mounting flicker */}
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-slate-950 text-white flex flex-col max-h-[90vh]">
+        <DialogContent className="w-full max-w-md sm:max-w-xl p-0 overflow-hidden border-none shadow-2xl bg-slate-950 text-white flex flex-col max-h-[90vh]">
           <div className="p-5 sm:p-8 flex flex-col flex-1 overflow-hidden">
             <div className="shrink-0 mb-4">
               <div className="flex justify-between items-center mb-4">
@@ -2481,9 +2519,9 @@ export default function Facturas() {
             </div>
           </div>
           <div className="p-4 sm:p-6 bg-slate-900 border-t border-white/5 flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
-            <Button className="w-full sm:flex-2 h-11 sm:h-12 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-wider shadow-lg order-first sm:order-last" onClick={() => handleSubmit()} disabled={submitting}>Confirmar Venta</Button>
-            <Button variant="outline" className="w-full sm:flex-1 h-11 sm:h-12 font-bold uppercase tracking-wider text-amber-500 border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-400" onClick={() => handleSubmit("pendiente")}>Guardar Pendiente</Button>
-            <Button variant="outline" className="w-full sm:flex-1 h-11 sm:h-12 font-bold uppercase tracking-wider text-slate-400 border-white/10 hover:bg-white/5 hover:text-white" onClick={() => setCheckoutOpen(false)}>Cancelar</Button>
+            <Button className="w-full sm:flex-[2] sm:min-w-0 min-h-11 sm:min-h-12 h-auto py-2 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-wider text-xs sm:text-sm shadow-lg order-first sm:order-last px-3 !whitespace-normal text-center leading-tight" onClick={() => handleSubmit()} disabled={submitting}>Confirmar Venta</Button>
+            <Button variant="outline" className="w-full sm:flex-1 sm:min-w-0 min-h-11 sm:min-h-12 h-auto py-2 font-bold uppercase tracking-wider text-xs sm:text-sm text-amber-500 border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-400 px-3 !whitespace-normal text-center leading-tight" onClick={() => handleSubmit("pendiente")}>Guardar Pendiente</Button>
+            <Button variant="outline" className="w-full sm:flex-1 sm:min-w-0 min-h-11 sm:min-h-12 h-auto py-2 font-bold uppercase tracking-wider text-xs sm:text-sm text-slate-400 border-white/10 hover:bg-white/5 hover:text-white px-3 !whitespace-normal text-center leading-tight" onClick={() => setCheckoutOpen(false)}>Cancelar</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -2634,7 +2672,7 @@ export default function Facturas() {
       </Dialog>
 
       <Dialog open={productModalOpen} onOpenChange={setProductModalOpen}>
-        <DialogContent className="w-full h-[100dvh] sm:h-auto max-w-full sm:max-w-4xl p-0 overflow-hidden border-none sm:border sm:border-white/10 shadow-2xl bg-slate-950 text-slate-100 flex flex-col animate-in fade-in duration-200 sm:!zoom-in-100 sm:!slide-in-from-top-[50%] sm:!slide-in-from-left-[50%]">
+        <DialogContent className="w-full h-[100dvh] sm:h-[80vh] max-w-full sm:max-w-5xl lg:max-w-6xl sm:max-h-[85vh] p-0 overflow-hidden border-none sm:border sm:border-white/10 shadow-2xl bg-slate-950 text-slate-100 flex flex-col animate-in fade-in duration-200 sm:!zoom-in-100 sm:!slide-in-from-top-[50%] sm:!slide-in-from-left-[50%]">
           <div className="p-4 sm:p-6 border-b border-white/5 bg-slate-900/50 shrink-0">
             <div className="flex justify-between items-center mb-5">
               <div className="flex items-center gap-3">
@@ -2676,7 +2714,7 @@ export default function Facturas() {
                })}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {products
                 .filter(p => {
                   // Categoría filter

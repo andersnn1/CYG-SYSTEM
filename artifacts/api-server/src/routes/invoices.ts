@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { db, invoicesTable, invoiceItemsTable, clientsTable, perfumeryTable, sublimationTable, salesTable, combosTable, comboItemsTable, journalEntriesTable, invoicePaymentsTable } from "@workspace/db";
-import { injectJournalEntry, isPeriodLocked } from "../lib/accounting-service";
+import { injectJournalEntry, isPeriodLocked, registrarCompraInventario } from "../lib/accounting-service";
 import {
   CreateInvoiceBody,
   UpdateInvoiceBody,
@@ -45,6 +45,7 @@ function mapInvoice(
       ...item,
       unitPrice: Number(item.unitPrice),
       total: Number(item.total),
+      costPrice: item.costPrice ? Number(item.costPrice) : 0,
     })),
     payments: payments?.map(p => ({
       ...p,
@@ -162,6 +163,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
       transportista: invoiceData.transportista ?? null,
       fotoGuiaPath: invoiceData.fotoGuiaPath ?? null,
       estadoEntrega: invoiceData.estadoEntrega ?? "Pendiente",
+      isBackToBack: invoiceData.isBackToBack ?? false,
       // ── Utilidad Real ─────────────────────────────────────────────────────────
       baseCost: invoiceData.baseCost != null ? String(invoiceData.baseCost) : null,
       internalExpenses: String(invoiceData.internalExpenses ?? 0),
@@ -180,6 +182,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
         total: String(item.quantity * item.unitPrice),
         productId: item.productId ?? null,
         productType: item.productType ?? null,
+        costPrice: item.costPrice != null ? String(item.costPrice) : null,
       }))
     ).returning();
 
@@ -187,6 +190,23 @@ router.post("/invoices", async (req, res): Promise<void> => {
 
     // Solo descontar stock, crear registro de venta e inyectar asientos si NO es borrador
     if (invoice.status !== "borrador") {
+      // Registrar compras en inventario si es Back-to-Back
+      if (invoice.isBackToBack) {
+        for (const item of items) {
+          if (!item.productId || !item.productType) continue;
+          if (item.productType === "perfumeria" || item.productType === "sublimacion") {
+            const purchaseCost = item.costPrice ? Number(item.costPrice) : 0;
+            await registrarCompraInventario(
+              item.productType,
+              item.productId,
+              item.quantity,
+              purchaseCost,
+              invoice.issueDate
+            );
+          }
+        }
+      }
+
       for (const item of items) {
         if (!item.productId || !item.productType) continue;
 
@@ -224,20 +244,20 @@ router.post("/invoices", async (req, res): Promise<void> => {
               if (cItem.productType === "perfumeria") {
                 const [cProduct] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, cItem.productId));
                 if (cProduct) {
-                  totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-                  await db.update(perfumeryTable)
-                    .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
-                    .where(eq(perfumeryTable.id, cItem.productId));
+                   totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                   await db.update(perfumeryTable)
+                     .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                     .where(eq(perfumeryTable.id, cItem.productId));
                 }
               } else if (cItem.productType === "sublimacion") {
                 const [cProduct] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, cItem.productId));
                 if (cProduct) {
-                  totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
-                  if (cProduct.stock !== null) {
-                    await db.update(sublimationTable)
-                      .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
-                      .where(eq(sublimationTable.id, cItem.productId));
-                  }
+                   totalCost += Number(cProduct.costPrice ?? 0) * cItem.quantity;
+                   if (cProduct.stock !== null) {
+                     await db.update(sublimationTable)
+                       .set({ stock: cProduct.stock - (cItem.quantity * item.quantity) })
+                       .where(eq(sublimationTable.id, cItem.productId));
+                   }
                 }
               }
             }
@@ -274,20 +294,14 @@ router.post("/invoices", async (req, res): Promise<void> => {
         .filter(it => it.productType === "sublimacion" || it.productType === "combo")
         .reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
 
-      await injectJournalEntry(
-        "invoice_created",
-        invoiceData.issueDate,
-        `Invoice_${invoice.id}`,
-        {
-          subtotal: Number(subtotal),
-          subtotal_perfumeria,
-          subtotal_sublimacion,
-          discount: Number(discount),
-          tax: Number(tax),
-          total: Number(total),
-        },
-        `Emisión de Factura ${invoiceNumber} - ${clientName}`
-      );
+      const baseCostVal = invoice.baseCost ? Number(invoice.baseCost) : 0;
+      const totalVal = Number(invoice.total);
+      const margenRealVal = totalVal - baseCostVal;
+      const partnerPayoutVal = margenRealVal * 0.50;
+      const remanenteVal = margenRealVal * 0.50;
+      const bancoOpexVal = baseCostVal + (remanenteVal * 0.50);
+      const bancoSueldoDuenoVal = remanenteVal * 0.40;
+      const bancoUtilidadVal = remanenteVal * 0.10;
 
       if (invoice.status === "pagada") {
         const [payment] = await db.insert(invoicePaymentsTable).values({
@@ -299,38 +313,64 @@ router.post("/invoices", async (req, res): Promise<void> => {
         }).returning();
         insertedPayment = payment;
 
-        const baseCostVal = invoice.baseCost ? Number(invoice.baseCost) : 0;
-        if (baseCostVal > 0) {
+        if (invoice.isBackToBack) {
           const internalExpensesVal = invoice.internalExpenses ? Number(invoice.internalExpenses) : 0;
-          const partnerPayoutVal = invoice.partnerPayout ? Number(invoice.partnerPayout) : 0;
-          const ownerPayoutVal = invoice.ownerPayout ? Number(invoice.ownerPayout) : 0;
+          const margenRealVal = Number((totalVal - baseCostVal - internalExpensesVal).toFixed(2));
+          const partnerPayoutVal = Number((margenRealVal * 0.50).toFixed(2));
+          const remanenteVal = Number((margenRealVal * 0.50).toFixed(2));
+          const ownerPayoutOperativaVal = Number((remanenteVal * 0.50).toFixed(2));
+          const ownerPayoutPersonalVal = Number((remanenteVal * 0.40).toFixed(2));
+          const ownerPayoutUtilidadVal = Number((remanenteVal - ownerPayoutOperativaVal - ownerPayoutPersonalVal).toFixed(2));
 
           await injectJournalEntry(
             "invoice_paid_back_to_back",
             invoice.issueDate,
-            `InvoicePayment_${invoice.id}`,
+            `Invoice_${invoice.id}`,
             {
-              total: Number(invoice.total),
+              ownerPayoutOperativa: ownerPayoutOperativaVal,
+              ownerPayoutPersonal: ownerPayoutPersonalVal,
+              ownerPayoutUtilidad: ownerPayoutUtilidadVal,
+              partnerPayout: partnerPayoutVal,
               baseCost: baseCostVal,
               internalExpenses: internalExpensesVal,
-              partnerPayout: partnerPayoutVal,
-              ownerPayoutOperativa: ownerPayoutVal * 0.50,
-              ownerPayoutPersonal: ownerPayoutVal * 0.40,
-              ownerPayoutUtilidad: ownerPayoutVal * 0.10,
+              total: totalVal,
             },
-            `Cobro de Factura Back-to-Back ${invoice.invoiceNumber} - ${invoice.clientName}`
+            `Venta Directa al Contado Factura Back-to-Back ${invoiceNumber} - ${clientName}`
           );
         } else {
           await injectJournalEntry(
-            "invoice_paid",
+            "invoice_direct_sale",
             invoice.issueDate,
-            `InvoicePayment_${invoice.id}`,
+            `Invoice_${invoice.id}`,
             {
-              total: Number(invoice.total),
+              subtotal: Number(subtotal),
+              subtotal_perfumeria,
+              subtotal_sublimacion,
+              total: totalVal,
+              baseCost: baseCostVal,
+              partnerPayout: partnerPayoutVal,
+              bancoOpex: bancoOpexVal,
+              bancoSueldoDueno: bancoSueldoDuenoVal,
+              bancoUtilidad: bancoUtilidadVal,
             },
-            `Cobro de Factura ${invoice.invoiceNumber} - ${invoice.clientName}`
+            `Venta Directa al Contado Factura ${invoiceNumber} - ${clientName}`
           );
         }
+      } else {
+        await injectJournalEntry(
+          "invoice_created",
+          invoiceData.issueDate,
+          `Invoice_${invoice.id}`,
+          {
+            subtotal: Number(subtotal),
+            subtotal_perfumeria,
+            subtotal_sublimacion,
+            discount: Number(discount),
+            tax: Number(tax),
+            total: Number(total),
+          },
+          `Emisión de Factura ${invoiceNumber} - ${clientName}`
+        );
       }
     }
 
@@ -352,6 +392,8 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Invoice not found" }); return; }
 
+  const existingItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, existing.id));
+
   if (await isPeriodLocked(existing.issueDate)) {
     res.status(400).json({ error: `El período contable para la fecha original de esta factura (${existing.issueDate}) está cerrado.` });
     return;
@@ -367,16 +409,24 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   // RESTRICCIÓN DE MODIFICACIÓN CONTABLE Y DE ARTÍCULOS PARA FACTURAS EMITIDAS/PAGADAS
   const isSubmitted = existing.status === "pendiente" || existing.status === "pagada";
   if (isSubmitted) {
+    const itemsChanged = items !== undefined && !(
+      items.length === existingItems.length &&
+      items.every((it, idx) => {
+        const ext = existingItems[idx];
+        return (
+          Number(it.quantity) === Number(ext.quantity) &&
+          Number(it.unitPrice) === Number(ext.unitPrice) &&
+          it.description === ext.description
+        );
+      })
+    );
+
     const hasFinancialChanges = 
-      items !== undefined ||
-      updateData.clientName !== undefined ||
-      updateData.clientRtn !== undefined ||
-      updateData.discount !== undefined ||
-      updateData.tax !== undefined ||
-      updateData.baseCost !== undefined ||
-      updateData.internalExpenses !== undefined ||
-      updateData.partnerPayout !== undefined ||
-      updateData.ownerPayout !== undefined ||
+      itemsChanged ||
+      (updateData.clientName !== undefined && updateData.clientName !== existing.clientName) ||
+      (updateData.clientRtn !== undefined && updateData.clientRtn !== existing.clientRtn) ||
+      (updateData.discount !== undefined && Number(updateData.discount) !== Number(existing.discount)) ||
+      (updateData.tax !== undefined && Number(updateData.tax) !== Number(existing.tax)) ||
       (updateData.issueDate !== undefined && updateData.issueDate !== existing.issueDate);
 
     if (hasFinancialChanges) {
@@ -389,7 +439,8 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   let discount = updateData.discount ?? Number(existing.discount);
   let tax = updateData.tax ?? Number(existing.tax);
 
-  if (items) {
+  // Solo actualizar items si NO está confirmada/pagada (es borrador)
+  if (!isSubmitted && items) {
     subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     await db.delete(salesTable).where(eq(salesTable.invoiceId, params.data.id));
     await db.delete(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, params.data.id));
@@ -402,41 +453,43 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
         total: String(item.quantity * item.unitPrice),
         productId: item.productId ?? null,
         productType: item.productType ?? null,
+        costPrice: item.costPrice != null ? String(item.costPrice) : null,
       }))
     );
   }
 
-  const total = subtotal - discount + tax;
+  const total = isSubmitted ? Number(existing.total) : (subtotal - discount + tax);
 
   const [updated] = await db.update(invoicesTable).set({
     ...(updateData.status && { status: updateData.status }),
-    ...(updateData.clientName && { clientName: updateData.clientName }),
+    ...(updateData.clientName && !isSubmitted && { clientName: updateData.clientName }),
     ...(updateData.clientPhone !== undefined && { clientPhone: updateData.clientPhone ?? null }),
     ...(updateData.clientEmail !== undefined && { clientEmail: updateData.clientEmail ?? null }),
     ...(updateData.clientAddress !== undefined && { clientAddress: updateData.clientAddress ?? null }),
     ...(updateData.clientCity !== undefined && { clientCity: updateData.clientCity ?? null }),
     ...(updateData.clientDepartment !== undefined && { clientDepartment: updateData.clientDepartment ?? null }),
-    subtotal: String(subtotal),
-    discount: String(discount),
-    tax: String(tax),
-    total: String(total),
+    subtotal: isSubmitted ? existing.subtotal : String(subtotal),
+    discount: isSubmitted ? existing.discount : String(discount),
+    tax: isSubmitted ? existing.tax : String(tax),
+    total: isSubmitted ? existing.total : String(total),
     ...(updateData.notes !== undefined && { notes: updateData.notes ?? null }),
-    ...(updateData.clientRtn !== undefined && { clientRtn: updateData.clientRtn ?? null }),
+    ...(updateData.clientRtn !== undefined && !isSubmitted && { clientRtn: updateData.clientRtn ?? null }),
     ...(updateData.paymentMethod && { paymentMethod: updateData.paymentMethod }),
     ...(updateData.transferReference !== undefined && { transferReference: updateData.transferReference ?? null }),
-    ...(updateData.issueDate && { issueDate: updateData.issueDate }),
+    ...(updateData.issueDate && !isSubmitted && { issueDate: updateData.issueDate }),
     ...(updateData.dueDate !== undefined && { dueDate: updateData.dueDate ? updateData.dueDate : null }),
     ...(updateData.numeroGuia !== undefined && { numeroGuia: updateData.numeroGuia ?? null }),
     ...(updateData.transportista !== undefined && { transportista: updateData.transportista ?? null }),
     ...(updateData.fotoGuiaPath !== undefined && { fotoGuiaPath: updateData.fotoGuiaPath ?? null }),
     ...(updateData.estadoEntrega !== undefined && { estadoEntrega: updateData.estadoEntrega }),
+    isBackToBack: updateData.isBackToBack !== undefined ? updateData.isBackToBack : existing.isBackToBack,
     // ── Utilidad Real ─────────────────────────────────────────────────────────
-    ...(updateData.baseCost != null && { baseCost: String(updateData.baseCost) }),
-    ...(updateData.internalExpenses != null && { internalExpenses: String(updateData.internalExpenses) }),
-    ...(updateData.internalExpensesNote !== undefined && { internalExpensesNote: updateData.internalExpensesNote ?? null }),
-    ...(updateData.taxes != null && { taxes: String(updateData.taxes) }),
-    ...(updateData.partnerPayout != null && { partnerPayout: String(updateData.partnerPayout) }),
-    ...(updateData.ownerPayout != null && { ownerPayout: String(updateData.ownerPayout) }),
+    baseCost: isSubmitted ? existing.baseCost : (updateData.baseCost != null ? String(updateData.baseCost) : existing.baseCost),
+    internalExpenses: isSubmitted ? existing.internalExpenses : (updateData.internalExpenses != null ? String(updateData.internalExpenses) : existing.internalExpenses),
+    internalExpensesNote: isSubmitted ? existing.internalExpensesNote : (updateData.internalExpensesNote !== undefined ? (updateData.internalExpensesNote ?? null) : existing.internalExpensesNote),
+    taxes: isSubmitted ? existing.taxes : (updateData.taxes != null ? String(updateData.taxes) : existing.taxes),
+    partnerPayout: isSubmitted ? existing.partnerPayout : (updateData.partnerPayout != null ? String(updateData.partnerPayout) : existing.partnerPayout),
+    ownerPayout: isSubmitted ? existing.ownerPayout : (updateData.ownerPayout != null ? String(updateData.ownerPayout) : existing.ownerPayout),
   }).where(eq(invoicesTable.id, params.data.id)).returning();
 
   const wasBorrador = existing.status === "borrador";
@@ -446,6 +499,24 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   if (isNowSubmitted) {
     if (wasBorrador) {
       const currentItems = await db.select().from(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, updated.id));
+      
+      // Registrar compras en inventario si es Back-to-Back
+      if (updated.isBackToBack) {
+        for (const item of currentItems) {
+          if (!item.productId || !item.productType) continue;
+          if (item.productType === "perfumeria" || item.productType === "sublimacion") {
+            const purchaseCost = item.costPrice ? Number(item.costPrice) : 0;
+            await registrarCompraInventario(
+              item.productType,
+              item.productId,
+              item.quantity,
+              purchaseCost,
+              updated.issueDate
+            );
+          }
+        }
+      }
+
       for (const item of currentItems) {
         if (!item.productId || !item.productType) continue;
 
@@ -546,20 +617,14 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
       .filter(it => it.productType === "sublimacion" || it.productType === "combo")
       .reduce((sum, it) => sum + (it.quantity * it.unitPrice), 0);
 
-    await injectJournalEntry(
-      "invoice_created",
-      updated.issueDate,
-      `Invoice_${updated.id}`,
-      {
-        subtotal: Number(updated.subtotal),
-        subtotal_perfumeria,
-        subtotal_sublimacion,
-        discount: Number(updated.discount),
-        tax: Number(updated.tax),
-        total: Number(updated.total),
-      },
-      `Emisión de Factura ${updated.invoiceNumber} - ${updated.clientName}`
-    );
+    const baseCostVal = updated.baseCost ? Number(updated.baseCost) : 0;
+    const totalVal = Number(updated.total);
+    const margenRealVal = totalVal - baseCostVal;
+    const partnerPayoutVal = margenRealVal * 0.50;
+    const remanenteVal = margenRealVal * 0.50;
+    const bancoOpexVal = baseCostVal + (remanenteVal * 0.50);
+    const bancoSueldoDuenoVal = remanenteVal * 0.40;
+    const bancoUtilidadVal = remanenteVal * 0.10;
 
     // If status is pagada, record/update the receipt journal entry
     if (updated.status === "pagada") {
@@ -581,39 +646,137 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
         }).where(eq(invoicePaymentsTable.id, existingPayment.id));
       }
 
-      const baseCostVal = updated.baseCost ? Number(updated.baseCost) : 0;
-      if (baseCostVal > 0) {
-        const internalExpensesVal = updated.internalExpenses ? Number(updated.internalExpenses) : 0;
-        const partnerPayoutVal = updated.partnerPayout ? Number(updated.partnerPayout) : 0;
-        const ownerPayoutVal = updated.ownerPayout ? Number(updated.ownerPayout) : 0;
+      if (wasBorrador) {
+        // Venta directa desde borrador (se emite como pagada inmediatamente)
+        if (updated.isBackToBack) {
+          const internalExpensesVal = updated.internalExpenses ? Number(updated.internalExpenses) : 0;
+          const margenRealVal = Number((totalVal - baseCostVal - internalExpensesVal).toFixed(2));
+          const partnerPayoutVal = Number((margenRealVal * 0.50).toFixed(2));
+          const remanenteVal = Number((margenRealVal * 0.50).toFixed(2));
+          const ownerPayoutOperativaVal = Number((remanenteVal * 0.50).toFixed(2));
+          const ownerPayoutPersonalVal = Number((remanenteVal * 0.40).toFixed(2));
+          const ownerPayoutUtilidadVal = Number((remanenteVal - ownerPayoutOperativaVal - ownerPayoutPersonalVal).toFixed(2));
 
-        await injectJournalEntry(
-          "invoice_paid_back_to_back",
-          updated.issueDate,
-          `InvoicePayment_${updated.id}`,
-          {
-            total: Number(updated.total),
-            baseCost: baseCostVal,
-            internalExpenses: internalExpensesVal,
-            partnerPayout: partnerPayoutVal,
-            ownerPayoutOperativa: ownerPayoutVal * 0.50,
-            ownerPayoutPersonal: ownerPayoutVal * 0.40,
-            ownerPayoutUtilidad: ownerPayoutVal * 0.10,
-          },
-          `Cobro de Factura Back-to-Back ${updated.invoiceNumber} - ${updated.clientName}`
-        );
+          await injectJournalEntry(
+            "invoice_paid_back_to_back",
+            updated.issueDate,
+            `Invoice_${updated.id}`,
+            {
+              ownerPayoutOperativa: ownerPayoutOperativaVal,
+              ownerPayoutPersonal: ownerPayoutPersonalVal,
+              ownerPayoutUtilidad: ownerPayoutUtilidadVal,
+              partnerPayout: partnerPayoutVal,
+              baseCost: baseCostVal,
+              internalExpenses: internalExpensesVal,
+              total: totalVal,
+            },
+            `Venta Directa al Contado Factura Back-to-Back ${updated.invoiceNumber} - ${updated.clientName}`
+          );
+        } else {
+          await injectJournalEntry(
+            "invoice_direct_sale",
+            updated.issueDate,
+            `Invoice_${updated.id}`,
+            {
+              subtotal: Number(updated.subtotal),
+              subtotal_perfumeria,
+              subtotal_sublimacion,
+              total: totalVal,
+              baseCost: baseCostVal,
+              partnerPayout: partnerPayoutVal,
+              bancoOpex: bancoOpexVal,
+              bancoSueldoDueno: bancoSueldoDuenoVal,
+              bancoUtilidad: bancoUtilidadVal,
+            },
+            `Venta Directa al Contado Factura ${updated.invoiceNumber} - ${updated.clientName}`
+          );
+        }
       } else {
-        await injectJournalEntry(
-          "invoice_paid",
-          updated.issueDate,
-          `InvoicePayment_${updated.id}`,
-          {
-            total: Number(updated.total),
-          },
-          `Cobro de Factura ${updated.invoiceNumber} - ${updated.clientName}`
-        );
+        // Cobro de factura pendiente (Apartado)
+        // GUARDIA ANTI-DOBLE-REGISTRO: Evita duplicidad de cobro si ya fue registrada como venta directa al contado
+        const [hasDirectSale] = await db
+          .select()
+          .from(journalEntriesTable)
+          .where(
+            and(
+              eq(journalEntriesTable.referenceSource, `Invoice_${updated.id}`),
+              sql`(${journalEntriesTable.narration} LIKE '%Venta Directa%' OR ${journalEntriesTable.narration} LIKE '%Venta al Contado%')`
+            )
+          );
+
+        if (hasDirectSale) {
+          console.warn(`[GUARDIA] Se omitió inyectar asiento de cobro para factura ${updated.id} porque ya tiene un asiento de venta directa al contado registrado.`);
+        } else {
+          if (updated.isBackToBack) {
+            const internalExpensesVal = updated.internalExpenses ? Number(updated.internalExpenses) : 0;
+            const margenRealVal = Number((totalVal - baseCostVal - internalExpensesVal).toFixed(2));
+            const partnerPayoutVal = Number((margenRealVal * 0.50).toFixed(2));
+            const remanenteVal = Number((margenRealVal * 0.50).toFixed(2));
+            const ownerPayoutOperativaVal = Number((remanenteVal * 0.50).toFixed(2));
+            const ownerPayoutPersonalVal = Number((remanenteVal * 0.40).toFixed(2));
+            const ownerPayoutUtilidadVal = Number((remanenteVal - ownerPayoutOperativaVal - ownerPayoutPersonalVal).toFixed(2));
+
+            await injectJournalEntry(
+              "invoice_paid_back_to_back",
+              updated.issueDate,
+              `InvoicePayment_${updated.id}`,
+              {
+                ownerPayoutOperativa: ownerPayoutOperativaVal,
+                ownerPayoutPersonal: ownerPayoutPersonalVal,
+                ownerPayoutUtilidad: ownerPayoutUtilidadVal,
+                partnerPayout: partnerPayoutVal,
+                baseCost: baseCostVal,
+                internalExpenses: internalExpensesVal,
+                total: totalVal,
+              },
+              `Cobro de Factura Back-to-Back ${updated.invoiceNumber} - ${updated.clientName}`
+            );
+          } else if (baseCostVal > 0) {
+            await injectJournalEntry(
+              "invoice_paid_apartado",
+              updated.issueDate,
+              `InvoicePayment_${updated.id}`,
+              {
+                total: totalVal,
+                baseCost: baseCostVal,
+                partnerPayout: partnerPayoutVal,
+                bancoOpex: bancoOpexVal,
+                bancoSueldoDueno: bancoSueldoDuenoVal,
+                bancoUtilidad: bancoUtilidadVal,
+              },
+              `Cobro de Factura (Apartado) ${updated.invoiceNumber} - ${updated.clientName}`
+            );
+          } else {
+            await injectJournalEntry(
+              "invoice_paid",
+              updated.issueDate,
+              `InvoicePayment_${updated.id}`,
+              {
+                total: totalVal,
+              },
+              `Cobro de Factura ${updated.invoiceNumber} - ${updated.clientName}`
+            );
+          }
+        }
       }
     } else {
+      if (wasBorrador) {
+        // Si antes era borrador y pasa a pendiente, emitimos la factura
+        await injectJournalEntry(
+          "invoice_created",
+          updated.issueDate,
+          `Invoice_${updated.id}`,
+          {
+            subtotal: Number(updated.subtotal),
+            subtotal_perfumeria,
+            subtotal_sublimacion,
+            discount: Number(updated.discount),
+            tax: Number(updated.tax),
+            total: Number(updated.total),
+          },
+          `Emisión de Factura ${updated.invoiceNumber} - ${updated.clientName}`
+        );
+      }
       // If reverted from paid, delete the payment records and journal entries
       await db.delete(invoicePaymentsTable).where(eq(invoicePaymentsTable.invoiceId, params.data.id));
       await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${updated.id}`));
