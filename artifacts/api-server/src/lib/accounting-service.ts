@@ -501,7 +501,8 @@ export async function registrarCompraInventario(
   productId: number,
   cantidad: number,
   costoUnitarioCompra: number,
-  dateStr?: string
+  dateStr?: string,
+  invoiceId?: number
 ) {
   const purchaseDate = dateStr || new Date().toISOString().split("T")[0];
 
@@ -575,7 +576,9 @@ export async function registrarCompraInventario(
   }
 
   // 4. Crear Asiento de Diario
-  const referenceSource = `Purchase_${productType}_${productId}_${Date.now()}`;
+  const referenceSource = invoiceId
+    ? `Purchase_${productType}_${productId}_Invoice_${invoiceId}`
+    : `Purchase_${productType}_${productId}_${Date.now()}`;
   const [entry] = await db
     .insert(journalEntriesTable)
     .values({

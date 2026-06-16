@@ -201,7 +201,8 @@ router.post("/invoices", async (req, res): Promise<void> => {
               item.productId,
               item.quantity,
               purchaseCost,
-              invoice.issueDate
+              invoice.issueDate,
+              invoice.id
             );
           }
         }
@@ -511,7 +512,8 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
               item.productId,
               item.quantity,
               purchaseCost,
-              updated.issueDate
+              updated.issueDate,
+              updated.id
             );
           }
         }
@@ -861,17 +863,23 @@ router.delete("/invoices/:id", async (req, res): Promise<void> => {
         if (item.productType === "perfumeria") {
           const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
           if (product) {
-            await db.update(perfumeryTable)
-              .set({ stock: product.stock + item.quantity })
-              .where(eq(perfumeryTable.id, item.productId));
+            // Si es back-to-back, la compra y la venta se anulan mutuamente, por lo que el stock neto no cambia.
+            if (!existing.isBackToBack) {
+              await db.update(perfumeryTable)
+                .set({ stock: product.stock + item.quantity })
+                .where(eq(perfumeryTable.id, item.productId));
+            }
           }
         } else if (item.productType === "sublimacion") {
           const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
           if (product) {
             if (product.stock !== null) {
-              await db.update(sublimationTable)
-                .set({ stock: product.stock + item.quantity })
-                .where(eq(sublimationTable.id, item.productId));
+              // Si es back-to-back, la compra y la venta se anulan mutuamente, por lo que el stock neto no cambia.
+              if (!existing.isBackToBack) {
+                await db.update(sublimationTable)
+                  .set({ stock: product.stock + item.quantity })
+                  .where(eq(sublimationTable.id, item.productId));
+              }
             }
           }
         } else if (item.productType === "combo") {
@@ -911,6 +919,9 @@ router.delete("/invoices/:id", async (req, res): Promise<void> => {
     // 4. Eliminar asientos contables asociados
     await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Invoice_${existing.id}`));
     await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${existing.id}`));
+    if (existing.isBackToBack) {
+      await db.delete(journalEntriesTable).where(sql`${journalEntriesTable.referenceSource} LIKE ${'Purchase_%_Invoice_' + existing.id}`);
+    }
 
     // 5. Eliminar ítems de la factura
     await db.delete(invoiceItemsTable).where(eq(invoiceItemsTable.invoiceId, existing.id));
@@ -952,17 +963,23 @@ router.post("/invoices/:id/cancel", async (req, res): Promise<void> => {
       if (item.productType === "perfumeria") {
         const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, item.productId));
         if (product) {
-          await db.update(perfumeryTable)
-            .set({ stock: product.stock + item.quantity })
-            .where(eq(perfumeryTable.id, item.productId));
+          // Si es back-to-back, la compra y la venta se anulan mutuamente, por lo que el stock neto no cambia.
+          if (!invoice.isBackToBack) {
+            await db.update(perfumeryTable)
+              .set({ stock: product.stock + item.quantity })
+              .where(eq(perfumeryTable.id, item.productId));
+          }
         }
       } else if (item.productType === "sublimacion") {
         const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, item.productId));
         if (product) {
           if (product.stock !== null) {
-            await db.update(sublimationTable)
-              .set({ stock: product.stock + item.quantity })
-              .where(eq(sublimationTable.id, item.productId));
+            // Si es back-to-back, la compra y la venta se anulan mutuamente, por lo que el stock neto no cambia.
+            if (!invoice.isBackToBack) {
+              await db.update(sublimationTable)
+                .set({ stock: product.stock + item.quantity })
+                .where(eq(sublimationTable.id, item.productId));
+            }
           }
         }
       } else if (item.productType === "combo") {
@@ -1001,6 +1018,9 @@ router.post("/invoices/:id/cancel", async (req, res): Promise<void> => {
     // 4. Eliminar asientos contables asociados
     await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `Invoice_${invoice.id}`));
     await db.delete(journalEntriesTable).where(eq(journalEntriesTable.referenceSource, `InvoicePayment_${invoice.id}`));
+    if (invoice.isBackToBack) {
+      await db.delete(journalEntriesTable).where(sql`${journalEntriesTable.referenceSource} LIKE ${'Purchase_%_Invoice_' + invoice.id}`);
+    }
 
     // 5. Marcar como anulada en la base de datos
     const [updated] = await db.update(invoicesTable)

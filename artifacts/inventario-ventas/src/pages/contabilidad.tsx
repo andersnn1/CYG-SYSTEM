@@ -1233,14 +1233,14 @@ export default function Contabilidad() {
                                       <span className="text-xs text-muted-foreground">ID Asiento: <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded border">{entry.id}</span></span>
                                     </div>
                                     
-                                    <div className="border rounded-xl overflow-hidden bg-background shadow-sm">
-                                      <Table>
+                                    <div className="border rounded-xl overflow-x-auto w-full bg-background shadow-sm">
+                                      <Table className="table-fixed w-full">
                                         <TableHeader className="bg-muted/40">
                                           <TableRow>
-                                            <TableHead className="text-xs h-9 py-0">Código</TableHead>
+                                            <TableHead className="text-xs h-9 py-0 w-16 md:w-20">Código</TableHead>
                                             <TableHead className="text-xs h-9 py-0">Cuenta Contable</TableHead>
-                                            <TableHead className="text-right text-xs h-9 py-0">Debe (L.)</TableHead>
-                                            <TableHead className="text-right text-xs h-9 py-0">Haber (L.)</TableHead>
+                                            <TableHead className="text-right text-xs h-9 py-0 w-24 md:w-32">Debe (L.)</TableHead>
+                                            <TableHead className="text-right text-xs h-9 py-0 w-24 md:w-32">Haber (L.)</TableHead>
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -1249,26 +1249,26 @@ export default function Contabilidad() {
                                             return (
                                               <TableRow key={line.id} className="hover:bg-transparent">
                                                 <TableCell className="font-mono text-xs font-semibold py-2">{line.accountCode}</TableCell>
-                                                <TableCell className={`py-2 ${!isDebit ? "pl-8 text-muted-foreground" : "font-semibold"}`}>
-                                                  <div className="flex items-center gap-1">
-                                                    {!isDebit && <span className="inline-block mr-1 opacity-50">└─</span>}
-                                                    <button 
+                                                <TableCell className={`py-2 min-w-0 ${!isDebit ? "pl-4 md:pl-8 text-muted-foreground" : "font-semibold"}`}>
+                                                  <div className="flex items-center gap-1 min-w-0">
+                                                    {!isDebit && <span className="inline-block opacity-50 shrink-0">└─</span>}
+                                                    <button
                                                       onClick={() => handleOpenAccountDrawer(line.accountCode)}
-                                                      className={`text-sm font-medium text-left hover:underline bg-transparent border-none p-0 cursor-pointer ${
-                                                        !isDebit 
-                                                          ? "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300" 
+                                                      className={`text-sm font-medium text-left hover:underline bg-transparent border-none p-0 cursor-pointer truncate min-w-0 ${
+                                                        !isDebit
+                                                          ? "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
                                                           : "text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                                                       }`}
-                                                      title="Ver detalle de esta cuenta"
+                                                      title={line.accountName}
                                                     >
                                                       {line.accountName}
                                                     </button>
                                                   </div>
                                                 </TableCell>
-                                                <TableCell className="text-right font-mono text-xs text-green-600 dark:text-green-400 py-2">
+                                                <TableCell className="text-right font-mono text-xs text-green-600 dark:text-green-400 py-2 whitespace-nowrap">
                                                   {parseFloat(line.debit) > 0 ? formatCurrency(parseFloat(line.debit)) : "—"}
                                                 </TableCell>
-                                                <TableCell className="text-right font-mono text-xs text-blue-600 dark:text-blue-400 py-2">
+                                                <TableCell className="text-right font-mono text-xs text-blue-600 dark:text-blue-400 py-2 whitespace-nowrap">
                                                   {parseFloat(line.credit) > 0 ? formatCurrency(parseFloat(line.credit)) : "—"}
                                                 </TableCell>
                                               </TableRow>
@@ -1276,8 +1276,8 @@ export default function Contabilidad() {
                                           })}
                                           <TableRow className="bg-muted/20 font-bold border-t-2">
                                             <TableCell colSpan={2} className="text-right text-xs uppercase py-2">TOTALES</TableCell>
-                                            <TableCell className="text-right font-mono text-xs text-green-600 dark:text-green-400 py-2">{formatCurrency(totalDebit)}</TableCell>
-                                            <TableCell className="text-right font-mono text-xs text-blue-600 dark:text-blue-400 py-2">{formatCurrency(totalCredit)}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-green-600 dark:text-green-400 py-2 whitespace-nowrap">{formatCurrency(totalDebit)}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-blue-600 dark:text-blue-400 py-2 whitespace-nowrap">{formatCurrency(totalCredit)}</TableCell>
                                           </TableRow>
                                         </TableBody>
                                       </Table>
