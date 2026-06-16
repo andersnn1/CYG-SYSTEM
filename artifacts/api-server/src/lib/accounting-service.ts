@@ -511,108 +511,109 @@ export async function registrarCompraInventario(
 
   const montoTotal = cantidad * costoUnitarioCompra;
 
-  return await db.transaction(async (tx) => {
-    // 1. Obtener producto y calcular Costo Promedio Ponderado
-    let productName = "";
-    let currentStock = 0;
-    let currentCost = 0;
+  // NOTA: No usamos db.transaction() porque el driver neon-http no lo soporta.
+  // Las queries se ejecutan secuencialmente de forma atómica individual.
 
-    if (productType === "perfumeria") {
-      const [product] = await tx.select().from(perfumeryTable).where(eq(perfumeryTable.id, productId));
-      if (!product) throw new Error(`Producto de perfumería con ID ${productId} no encontrado.`);
-      productName = product.name;
-      currentStock = product.stock ?? 0;
-      currentCost = Number(product.costPrice ?? 0);
-    } else if (productType === "sublimacion") {
-      const [product] = await tx.select().from(sublimationTable).where(eq(sublimationTable.id, productId));
-      if (!product) throw new Error(`Producto de sublimación con ID ${productId} no encontrado.`);
-      productName = product.name;
-      currentStock = product.stock ?? 0;
-      currentCost = Number(product.costPrice ?? 0);
-    } else if (productType === "custom-inventory") {
-      const [product] = await tx.select().from(customInventoryTable).where(eq(customInventoryTable.id, productId));
-      if (!product) throw new Error(`Producto de inventario personalizado con ID ${productId} no encontrado.`);
-      productName = product.name;
-      currentStock = product.stock ?? 0;
-      currentCost = Number(product.costPrice ?? 0);
-    } else {
-      throw new Error(`Tipo de producto ${productType} no soportado para compras.`);
+  // 1. Obtener producto y calcular Costo Promedio Ponderado
+  let productName = "";
+  let currentStock = 0;
+  let currentCost = 0;
+
+  if (productType === "perfumeria") {
+    const [product] = await db.select().from(perfumeryTable).where(eq(perfumeryTable.id, productId));
+    if (!product) throw new Error(`Producto de perfumería con ID ${productId} no encontrado.`);
+    productName = product.name;
+    currentStock = product.stock ?? 0;
+    currentCost = Number(product.costPrice ?? 0);
+  } else if (productType === "sublimacion") {
+    const [product] = await db.select().from(sublimationTable).where(eq(sublimationTable.id, productId));
+    if (!product) throw new Error(`Producto de sublimación con ID ${productId} no encontrado.`);
+    productName = product.name;
+    currentStock = product.stock ?? 0;
+    currentCost = Number(product.costPrice ?? 0);
+  } else if (productType === "custom-inventory") {
+    const [product] = await db.select().from(customInventoryTable).where(eq(customInventoryTable.id, productId));
+    if (!product) throw new Error(`Producto de inventario personalizado con ID ${productId} no encontrado.`);
+    productName = product.name;
+    currentStock = product.stock ?? 0;
+    currentCost = Number(product.costPrice ?? 0);
+  } else {
+    throw new Error(`Tipo de producto ${productType} no soportado para compras.`);
+  }
+
+  // Salvaguarda: si stock actual es negativo o cero, no ponderamos negativamente
+  const stockActual = Math.max(0, currentStock);
+  const totalNuevo = stockActual + cantidad;
+  const nuevoCostoPromedio = totalNuevo > 0
+    ? ((stockActual * currentCost) + (cantidad * costoUnitarioCompra)) / totalNuevo
+    : costoUnitarioCompra;
+
+  const nuevoCostoStr = nuevoCostoPromedio.toFixed(2);
+  const nuevoStock = currentStock + cantidad;
+
+  // 2. Actualizar stock y costo en la tabla correspondiente
+  if (productType === "perfumeria") {
+    await db.update(perfumeryTable)
+      .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
+      .where(eq(perfumeryTable.id, productId));
+  } else if (productType === "sublimacion") {
+    await db.update(sublimationTable)
+      .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
+      .where(eq(sublimationTable.id, productId));
+  } else if (productType === "custom-inventory") {
+    await db.update(customInventoryTable)
+      .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
+      .where(eq(customInventoryTable.id, productId));
+  }
+
+  // 3. Obtener cuentas contables
+  const [inventarioAccount] = await db.select().from(accountsTable).where(eq(accountsTable.code, "1120"));
+  const [bancoOpexAccount] = await db.select().from(accountsTable).where(eq(accountsTable.code, "1020"));
+
+  if (!inventarioAccount || !bancoOpexAccount) {
+    throw new Error("Cuentas contables indispensables (1120 o 1020) no encontradas en el catálogo.");
+  }
+
+  // 4. Crear Asiento de Diario
+  const referenceSource = `Purchase_${productType}_${productId}_${Date.now()}`;
+  const [entry] = await db
+    .insert(journalEntriesTable)
+    .values({
+      date: purchaseDate,
+      referenceSource,
+      narration: `Compra al contado - ${cantidad} uds de ${productName} (Costo Unitario: L. ${costoUnitarioCompra.toFixed(2)})`,
+    })
+    .returning();
+
+  // Determinar la línea de negocio (businessLine)
+  const businessLine = productType === "perfumeria" 
+    ? ("perfumeria" as const) 
+    : productType === "sublimacion" 
+      ? ("sublimacion" as const) 
+      : ("general" as const);
+
+  // 5. Insertar líneas de diario (Partida Contable: Debe 1120, Haber 1020)
+  await db.insert(journalLinesTable).values([
+    {
+      journalEntryId: entry.id,
+      accountId: inventarioAccount.id,
+      debit: montoTotal.toFixed(2),
+      credit: "0.00",
+      businessLine,
+    },
+    {
+      journalEntryId: entry.id,
+      accountId: bancoOpexAccount.id,
+      debit: "0.00",
+      credit: montoTotal.toFixed(2),
+      businessLine,
     }
+  ]);
 
-    // Salvaguarda: si stock actual es negativo o cero, no ponderamos negativamente
-    const stockActual = Math.max(0, currentStock);
-    const totalNuevo = stockActual + cantidad;
-    const nuevoCostoPromedio = totalNuevo > 0
-      ? ((stockActual * currentCost) + (cantidad * costoUnitarioCompra)) / totalNuevo
-      : costoUnitarioCompra;
-
-    const nuevoCostoStr = nuevoCostoPromedio.toFixed(2);
-    const nuevoStock = currentStock + cantidad;
-
-    // 2. Actualizar stock y costo en la tabla correspondiente
-    if (productType === "perfumeria") {
-      await tx.update(perfumeryTable)
-        .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
-        .where(eq(perfumeryTable.id, productId));
-    } else if (productType === "sublimacion") {
-      await tx.update(sublimationTable)
-        .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
-        .where(eq(sublimationTable.id, productId));
-    } else if (productType === "custom-inventory") {
-      await tx.update(customInventoryTable)
-        .set({ stock: nuevoStock, costPrice: nuevoCostoStr })
-        .where(eq(customInventoryTable.id, productId));
-    }
-
-    // 3. Obtener cuentas contables
-    const [inventarioAccount] = await tx.select().from(accountsTable).where(eq(accountsTable.code, "1120"));
-    const [bancoOpexAccount] = await tx.select().from(accountsTable).where(eq(accountsTable.code, "1020"));
-
-    if (!inventarioAccount || !bancoOpexAccount) {
-      throw new Error("Cuentas contables indispensables (1120 o 1020) no encontradas en el catálogo.");
-    }
-
-    // 4. Crear Asiento de Diario
-    const referenceSource = `Purchase_${productType}_${productId}_${Date.now()}`;
-    const [entry] = await tx
-      .insert(journalEntriesTable)
-      .values({
-        date: purchaseDate,
-        referenceSource,
-        narration: `Compra al contado - ${cantidad} uds de ${productName} (Costo Unitario: L. ${costoUnitarioCompra.toFixed(2)})`,
-      })
-      .returning();
-
-    // Determinar la línea de negocio (businessLine)
-    const businessLine = productType === "perfumeria" 
-      ? ("perfumeria" as const) 
-      : productType === "sublimacion" 
-        ? ("sublimacion" as const) 
-        : ("general" as const);
-
-    // 5. Insertar líneas de diario (Partida Contable: Debe 1120, Haber 1020)
-    await tx.insert(journalLinesTable).values([
-      {
-        journalEntryId: entry.id,
-        accountId: inventarioAccount.id,
-        debit: montoTotal.toFixed(2),
-        credit: "0.00",
-        businessLine,
-      },
-      {
-        journalEntryId: entry.id,
-        accountId: bancoOpexAccount.id,
-        debit: "0.00",
-        credit: montoTotal.toFixed(2),
-        businessLine,
-      }
-    ]);
-
-    return {
-      journalEntry: entry,
-      nuevoStock,
-      nuevoCosto: nuevoCostoPromedio,
-      montoTotal,
-    };
-  });
+  return {
+    journalEntry: entry,
+    nuevoStock,
+    nuevoCosto: nuevoCostoPromedio,
+    montoTotal,
+  };
 }

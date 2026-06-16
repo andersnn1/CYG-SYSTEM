@@ -126,6 +126,38 @@ const STATUS_CONFIG = {
   cancelada: { label: "Cancelada", icon: XCircle, classes: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-400" },
 } as const;
 
+function AutoGrowTextarea({
+  value,
+  onChange,
+  placeholder,
+  className,
+  maxHeight = 80,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+  maxHeight?: number;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, maxHeight) + "px";
+  }, [value, maxHeight]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={1}
+      className={className}
+    />
+  );
+}
+
 function StatusBadge({ status }: { status: Invoice["status"] }) {
   const { label, classes, dot } = STATUS_CONFIG[status];
   return (
@@ -2218,30 +2250,30 @@ export default function Facturas() {
   } else {
     mainContent = (
       <div className="flex flex-col h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] overflow-hidden bg-background animate-in fade-in duration-200 border rounded-lg shadow-2xl m-2">
-      <header className="h-14 border-b bg-muted/40 flex items-center justify-between gap-3 px-3 lg:px-6 shrink-0">
-        <div className="flex items-center gap-2 lg:gap-6 min-w-0">
-          <Button variant="ghost" size="sm" className="h-9 gap-1.5 font-bold uppercase tracking-widest text-muted-foreground shrink-0" onClick={() => { setView("list"); setEditingId(null); setForm(defaultForm()); }}>
-            <ArrowLeft className="h-4 w-4" /> <span className="hidden lg:inline">Salir [ESC]</span><span className="lg:hidden">ESC</span>
+      <header className="h-14 border-b bg-muted/40 flex items-center justify-between gap-2 px-3 lg:px-4 shrink-0">
+        <div className="flex items-center gap-2 lg:gap-3 min-w-0 shrink">
+          <Button variant="ghost" size="sm" className="h-9 px-2 gap-1.5 font-bold uppercase tracking-wider text-muted-foreground shrink-0 text-[11px]" onClick={() => { setView("list"); setEditingId(null); setForm(defaultForm()); }}>
+            <ArrowLeft className="h-4 w-4" /> Salir [ESC]
           </Button>
-          <div className="hidden lg:block h-6 w-px bg-border shrink-0"></div>
-          <div className="hidden xl:flex flex-col min-w-0">
-            <h1 className="font-black text-sm tracking-tight uppercase leading-tight whitespace-nowrap truncate">{editingId ? (editingInvoice?.invoiceNumber ?? "Factura") : "Terminal POS"}</h1>
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] whitespace-nowrap">C&G Electronics</span>
+          <div className="h-6 w-px bg-border shrink-0"></div>
+          <div className="flex flex-col min-w-0 shrink">
+            <h1 className="font-black text-[13px] tracking-tight uppercase leading-tight whitespace-nowrap truncate">{editingId ? (editingInvoice?.invoiceNumber ?? "Factura") : "Terminal POS"}</h1>
+            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.18em] whitespace-nowrap truncate">C&G Electronics</span>
           </div>
           {editingId && editingInvoice && <StatusBadge status={editingInvoice.status} />}
         </div>
-        <div className="flex items-center gap-2 lg:gap-3 shrink-0">
-          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider border-blue-200/50 text-blue-600 hover:bg-blue-50 whitespace-nowrap" onClick={() => setProductModalOpen(true)}>
-            <Package className="h-4 w-4" /> <span className="hidden xl:inline">Productos </span>[F3]
+        <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
+          <Button variant="outline" size="sm" className="h-9 px-2.5 gap-1.5 font-bold uppercase tracking-wider text-[11px] border-blue-200/50 text-blue-600 hover:bg-blue-50 whitespace-nowrap" onClick={() => setProductModalOpen(true)}>
+            <Package className="h-4 w-4" /> Productos [F3]
           </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider whitespace-nowrap" onClick={() => setNotesModalOpen(true)}>
-            <FileText className="h-4 w-4" /> <span className="hidden xl:inline">Notas </span>[F6]
+          <Button variant="outline" size="sm" className="h-9 px-2.5 gap-1.5 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap" onClick={() => setNotesModalOpen(true)}>
+            <FileText className="h-4 w-4" /> Notas [F6]
           </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-2 font-bold uppercase tracking-wider whitespace-nowrap" onClick={handleOpenClientModal}>
-            <UserPlus className="h-4 w-4" /> <span className="hidden xl:inline">Cliente </span>[F7]
+          <Button variant="outline" size="sm" className="h-9 px-2.5 gap-1.5 font-bold uppercase tracking-wider text-[11px] whitespace-nowrap" onClick={handleOpenClientModal}>
+            <UserPlus className="h-4 w-4" /> Cliente [F7]
           </Button>
-          <Button className="h-9 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase tracking-wider px-3 lg:px-6 shadow-lg whitespace-nowrap" onClick={() => setCheckoutOpen(true)}>
-            <Coins className="h-4 w-4 mr-2" /> <span className="hidden xl:inline">Cobrar </span>[F4]
+          <Button className="h-9 px-3 lg:px-4 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase tracking-wider text-[11px] shadow-lg whitespace-nowrap" onClick={() => setCheckoutOpen(true)}>
+            <Coins className="h-4 w-4" /> Cobrar [F4]
           </Button>
         </div>
       </header>
@@ -2249,22 +2281,22 @@ export default function Facturas() {
       <main className="flex flex-1 overflow-hidden">
         <section className="flex-1 min-w-0 flex flex-col border-r overflow-hidden bg-card/50">
           <div className="flex-1 overflow-auto">
-            <table className="w-full min-w-[640px] border-collapse">
+            <table className="w-full table-fixed border-collapse">
               <thead className="sticky top-0 bg-muted z-20 border-b">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground w-12">#</th>
-                  <th className="px-2 py-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground w-40">Código [F2]</th>
+                  <th className="px-2 py-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground w-10">#</th>
+                  <th className="px-2 py-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground w-28 xl:w-36">Código [F2]</th>
                   <th className="px-2 py-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground">Descripción</th>
-                  <th className="px-2 py-3 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground w-20">Cant.</th>
-                  <th className="px-2 py-3 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground w-32">Precio</th>
-                  <th className="px-2 py-3 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground w-32">Total</th>
+                  <th className="px-2 py-3 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground w-16">Cant.</th>
+                  <th className="px-2 py-3 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground w-24">Precio</th>
+                  <th className="px-2 py-3 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground w-28">Total</th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-muted/50">
                 {form.items.map((it, i) => (
-                  <tr key={i} className="group hover:bg-blue-50/50 transition-colors">
-                    <td className="px-4 py-4 text-[10px] font-black font-mono text-muted-foreground/40">{i + 1}</td>
+                  <tr key={i} className="group hover:bg-blue-50/50 transition-colors align-top">
+                    <td className="px-2 py-4 text-center text-[10px] font-black font-mono text-muted-foreground/40">{i + 1}</td>
                     <td className="px-2 py-2">
                       <Input
                         id={`product-code-input-${i}`}
@@ -2275,8 +2307,14 @@ export default function Facturas() {
                         onKeyDown={e => e.key === "Enter" && handleCodeSearch(i, e.currentTarget.value)}
                       />
                     </td>
-                    <td className="px-2 py-2">
-                       <Input className="h-9 px-2 py-1 text-xs font-semibold bg-transparent border-transparent focus:border-blue-500" placeholder="Producto..." value={it.description} onChange={e => updateItem(i, "description", e.target.value)} />
+                    <td className="px-2 py-2 align-top">
+                       <AutoGrowTextarea
+                         className="w-full min-h-9 px-2 py-2 text-xs font-semibold bg-transparent border border-transparent rounded-md focus:border-blue-500 focus:outline-none resize-none leading-snug placeholder:text-muted-foreground no-scrollbar overflow-hidden"
+                         placeholder="Producto..."
+                         value={it.description}
+                         onChange={v => updateItem(i, "description", v)}
+                         maxHeight={200}
+                       />
                     </td>
                     <td className="px-2 py-2">
                        <Input type="number" className="h-9 px-1 py-1 text-center font-mono font-bold text-xs bg-transparent border-transparent focus:border-blue-500" value={it.quantity} onChange={e => updateItem(i, "quantity", Number(e.target.value))} />
@@ -2285,7 +2323,7 @@ export default function Facturas() {
                        <Input type="number" className="h-9 px-2 py-1 text-right font-mono font-bold text-xs bg-transparent border-transparent focus:border-blue-500" value={it.unitPrice} onChange={e => updateItem(i, "unitPrice", Number(e.target.value))} />
                     </td>
                     <td className="px-2 py-2 text-right font-black font-mono text-xs">{formatCurrency(it.quantity * it.unitPrice)}</td>
-                    <td className="px-4 py-2">
+                    <td className="px-1 py-2 text-center">
                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4" /></Button>
                     </td>
                   </tr>
@@ -2298,7 +2336,7 @@ export default function Facturas() {
           </div>
         </section>
 
-        <aside className="w-[380px] shrink-0 flex flex-col bg-muted/20 overflow-hidden">
+        <aside className="w-[300px] xl:w-[380px] shrink-0 flex flex-col bg-muted/20 overflow-hidden">
           <section className="p-6 bg-card border-b shadow-sm shrink-0">
             <div className="space-y-3">
               <div className="flex justify-between items-baseline"><span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Subtotal</span><span className="text-lg font-bold font-mono">{formatCurrency(subtotal)}</span></div>

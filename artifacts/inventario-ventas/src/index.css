@@ -246,3 +246,12 @@ button, [role="button"], a {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Ocultar scrollbar visualmente, manteniendo el scroll funcional */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
