@@ -2764,8 +2764,8 @@ export default function Contabilidad() {
 
       {/* Account Details Drawer / Sheet */}
       <Sheet open={isAccountDrawerOpen} onOpenChange={setIsAccountDrawerOpen}>
-        <SheetContent className="sm:max-w-md overflow-y-auto h-full flex flex-col justify-between">
-          <div className="space-y-6">
+        <SheetContent className="sm:max-w-md h-full flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-6 pr-1">
             <SheetHeader className="text-left border-b pb-4">
               <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider font-bold">
                 <span>Cuenta Contable</span>
@@ -2815,8 +2815,8 @@ export default function Contabilidad() {
                   No hay movimientos registrados para esta cuenta.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                  {accountTransactions.slice(0, 5).map((tx, idx) => (
+                <div className="space-y-2">
+                  {accountTransactions.map((tx, idx) => (
                     <div key={idx} className="p-3 border rounded-xl bg-background/50 hover:bg-muted/10 transition-colors space-y-2">
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col">
@@ -2847,7 +2847,7 @@ export default function Contabilidad() {
             </div>
           </div>
 
-          <div className="pt-4 border-t mt-4 space-y-2 col-span-2">
+          <div className="shrink-0 pt-4 border-t mt-4 space-y-2">
             <Button
               className="w-full gap-2 h-11"
               onClick={() => {

@@ -15,4 +15,6 @@ export * from "./accounting_mappings";
 export * from "./accounting_periods";
 export * from "./invoice_payments";
 export * from "./legacy";
+export * from "./purchases";
+
 
